@@ -5,11 +5,13 @@ import (
 	"github.com/Kansuler/octobe"
 )
 
+// Product is an example database model
 type Product struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
+// InsertProduct will take a pointer of a product, and insert it
 func InsertProduct(p *Product) octobe.Handler {
 	return func(scheme octobe.Scheme) error {
 		seg := scheme.NewSegment(`
@@ -25,6 +27,7 @@ func InsertProduct(p *Product) octobe.Handler {
 	}
 }
 
+// UpdateProduct will take a pointer and update the fields
 func UpdateProduct(p *Product) octobe.Handler {
 	return func(scheme octobe.Scheme) error {
 		seg := scheme.NewSegment(`
@@ -42,6 +45,7 @@ func UpdateProduct(p *Product) octobe.Handler {
 	}
 }
 
+// ProductByID will take an id, and a pointer to scan into
 func ProductByID(id string, p *Product) octobe.Handler {
 	return func(scheme octobe.Scheme) error {
 		seg := scheme.NewSegment(`
@@ -60,8 +64,9 @@ func ProductByID(id string, p *Product) octobe.Handler {
 	}
 }
 
+// Products will take a pointer to append Products into
 func Products(result *[]Product) (handler octobe.Handler) {
-	handler = func(scheme octobe.Scheme) (err error) {
+	return func(scheme octobe.Scheme) (err error) {
 		seg := scheme.NewSegment(`
 			SELECT
 				id,
@@ -90,5 +95,4 @@ func Products(result *[]Product) (handler octobe.Handler) {
 
 		return
 	}
-	return
 }

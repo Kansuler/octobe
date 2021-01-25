@@ -6,6 +6,7 @@ import (
 	"errors"
 )
 
+// Head object that holds the database session
 type Octobe struct {
 	DB *sql.DB
 }
@@ -25,8 +26,11 @@ type Scheme struct {
 	ctx context.Context
 }
 
+// Handler is a signature that can be used for handling
+// database segments in a separate function
 type Handler func(scheme Scheme) error
 
+// Handle is a method that handle a handler
 func (scheme Scheme) Handle(handler Handler) error {
 	return handler(scheme)
 }
@@ -79,7 +83,7 @@ func (scheme *Scheme) NewSegment(query string) *Segment {
 	}
 }
 
-// Argument receives a
+// Arguments receives unknown amount of arguments to use in the query
 func (segment *Segment) Arguments(args ...interface{}) {
 	segment.args = args
 }
