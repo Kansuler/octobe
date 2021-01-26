@@ -186,6 +186,10 @@ func (scheme Scheme) WatchRollback(cb func() error) {
 
 // WatchTransaction will perform the whole transaction, or do rollback if error occurred.
 func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme Scheme) error, opts ...*sql.TxOptions) error {
+	if len(opts) == 0 {
+		opts = append(opts, &sql.TxOptions{})
+	}
+
 	scheme, err := ob.BeginTx(ctx, opts[0])
 	if err != nil {
 		return err
