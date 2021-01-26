@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Kansuler/octobe"
 	"github.com/stretchr/testify/assert"
-	"log"
 	"testing"
 )
 
@@ -29,8 +29,8 @@ func TestQuery(t *testing.T) {
 	mock.ExpectQuery("SELECT id, name FROM products").WithArgs(3).WillReturnError(sql.ErrNoRows)
 
 	ctx := context.Background()
-	octo := octobe.New(db)
-	scheme := octo.Begin(ctx)
+	ob := octobe.New(db)
+	scheme := ob.Begin(ctx)
 	seg := scheme.Segment(`
 		UPDATE
 			products
@@ -111,8 +111,8 @@ func TestTransaction(t *testing.T) {
 	mock.ExpectCommit()
 
 	ctx := context.Background()
-	octo := octobe.New(db)
-	tx, err := octo.BeginTx(ctx, nil)
+	ob := octobe.New(db)
+	tx, err := ob.BeginTx(ctx, nil)
 	assert.NoError(t, err, "does not expect begin transaction go get error")
 	var id int
 	seg := tx.Segment(`
@@ -151,9 +151,9 @@ func TestTransaction_WatchRollback(t *testing.T) {
 
 	func() {
 		ctx := context.Background()
-		octo := octobe.New(db)
+		ob := octobe.New(db)
 
-		tx, err := octo.BeginTx(ctx, nil)
+		tx, err := ob.BeginTx(ctx, nil)
 		assert.NoError(t, err, "does not expect begin transaction go get error")
 
 		defer tx.WatchRollback(func() error {
@@ -200,7 +200,7 @@ func TestTransaction_WithHandlers(t *testing.T) {
 	defer db.Close()
 	mock.ExpectBegin()
 	mock.ExpectQuery("INSERT INTO products").WithArgs("Testing").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery("SELECT id, name FROM products").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "test1").AddRow(2, "test2"))
+	mock.ExpectQuery("SELECT id, name FROM products").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow("1", "test1").AddRow("2", "test2"))
 	mock.ExpectCommit()
 
 	handler := func(p *Product) octobe.Handler {
@@ -255,10 +255,13 @@ func TestTransaction_WithHandlers(t *testing.T) {
 		}
 	}
 
-	var result []Product
-	err = scheme.Handle(handler2(&result))
+	var results []Product
+	err = scheme.Handle(handler2(&results))
 	assert.NoError(t, err)
-	log.Print(result)
+	for index, result := range results {
+		assert.Equal(t, fmt.Sprintf("%d", index+1), result.ID)
+		assert.Equal(t, fmt.Sprintf("test%d", index+1), result.Name)
+	}
 
 	err = scheme.Commit()
 	assert.NoError(t, err)
