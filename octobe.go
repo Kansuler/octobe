@@ -36,8 +36,12 @@ func (scheme Scheme) Handle(handler Handler) error {
 }
 
 // BeginTx initiates a transaction against database
-func (ob Octobe) BeginTx(ctx context.Context, opts *sql.TxOptions) (scheme Scheme, err error) {
-	scheme.tx, err = ob.DB.BeginTx(ctx, opts)
+func (ob Octobe) BeginTx(ctx context.Context, opts ...*sql.TxOptions) (scheme Scheme, err error) {
+	if len(opts) == 0 {
+		opts = append(opts, &sql.TxOptions{})
+	}
+
+	scheme.tx, err = ob.DB.BeginTx(ctx, opts[0])
 	scheme.db = ob.DB
 	scheme.ctx = ctx
 	return
