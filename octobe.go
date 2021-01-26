@@ -6,7 +6,7 @@ import (
 	"errors"
 )
 
-// Head object that holds the database session
+// Octobe struct that holds the database session
 type Octobe struct {
 	DB *sql.DB
 }
@@ -72,8 +72,8 @@ func (segment *Segment) use() {
 	segment.used = true
 }
 
-// NewSegment created a new query within a database transaction
-func (scheme *Scheme) NewSegment(query string) *Segment {
+// Segment created a new query within a database transaction
+func (scheme *Scheme) Segment(query string) *Segment {
 	return &Segment{
 		query: query,
 		args:  nil,

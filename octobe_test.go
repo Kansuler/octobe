@@ -31,7 +31,7 @@ func TestQuery(t *testing.T) {
 	ctx := context.Background()
 	octo := octobe.New(db)
 	scheme := octo.Begin(ctx)
-	seg := scheme.NewSegment(`
+	seg := scheme.Segment(`
 		UPDATE
 			products
 		WHERE
@@ -48,7 +48,7 @@ func TestQuery(t *testing.T) {
 
 	var result []Product
 
-	seg = scheme.NewSegment(`
+	seg = scheme.Segment(`
 		SELECT
 			id,
 			name
@@ -75,7 +75,7 @@ func TestQuery(t *testing.T) {
 	assert.NoError(t, err, "query should not return error")
 
 	var product Product
-	seg = scheme.NewSegment(`
+	seg = scheme.Segment(`
 		SELECT
 			id,
 			name
@@ -115,7 +115,7 @@ func TestTransaction(t *testing.T) {
 	tx, err := octo.BeginTx(ctx, nil)
 	assert.NoError(t, err, "does not expect begin transaction go get error")
 	var id int
-	seg := tx.NewSegment(`
+	seg := tx.Segment(`
 		UPDATE
 			products
 		SET
@@ -161,7 +161,7 @@ func TestTransaction_WatchRollback(t *testing.T) {
 		})
 
 		var id int
-		seg := tx.NewSegment(`
+		seg := tx.Segment(`
 			UPDATE
 				products
 			SET
@@ -205,7 +205,7 @@ func TestTransaction_WithHandlers(t *testing.T) {
 
 	handler := func(p *Product) octobe.Handler {
 		return func(scheme octobe.Scheme) error {
-			seg := scheme.NewSegment(`
+			seg := scheme.Segment(`
 				INSERT INTO
 					products(name)
 				VALUES($1)
@@ -227,7 +227,7 @@ func TestTransaction_WithHandlers(t *testing.T) {
 
 	handler2 := func(result *[]Product) octobe.Handler {
 		return func(scheme octobe.Scheme) error {
-			seg := scheme.NewSegment(`
+			seg := scheme.Segment(`
 				SELECT
 					id,
 					name
