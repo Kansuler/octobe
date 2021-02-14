@@ -202,7 +202,8 @@ func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) e
 	err = cb(&scheme)
 
 	if err != nil {
-		return scheme.Rollback()
+		_ = scheme.Rollback()
+		return err
 	}
 
 	return scheme.Commit()
