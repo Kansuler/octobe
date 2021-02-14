@@ -28,10 +28,10 @@ type Scheme struct {
 
 // Handler is a signature that can be used for handling
 // database segments in a separate function
-type Handler func(scheme Scheme) error
+type Handler func(scheme *Scheme) error
 
 // Handle is a method that handle a handler
-func (scheme Scheme) Handle(handler Handler) error {
+func (scheme *Scheme) Handle(handler Handler) error {
 	return handler(scheme)
 }
 
@@ -170,26 +170,26 @@ func (segment *Segment) Insert(dest ...interface{}) error {
 }
 
 // Commit will commit a transaction
-func (scheme Scheme) Commit() error {
+func (scheme *Scheme) Commit() error {
 	return scheme.tx.Commit()
 }
 
 // Rollback will rollback a transaction
-func (scheme Scheme) Rollback() error {
+func (scheme *Scheme) Rollback() error {
 	return scheme.tx.Rollback()
 }
 
 // WatchRollback will perform a rollback if an error is given
 // This method can be used as a defer in the function that performs
 // the database operations.
-func (scheme Scheme) WatchRollback(cb func() error) {
+func (scheme *Scheme) WatchRollback(cb func() error) {
 	if cb() != nil {
 		_ = scheme.tx.Rollback()
 	}
 }
 
 // WatchTransaction will perform the whole transaction, or do rollback if error occurred.
-func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme Scheme) error, opts ...*sql.TxOptions) error {
+func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) error, opts ...*sql.TxOptions) error {
 	if len(opts) == 0 {
 		opts = append(opts, &sql.TxOptions{})
 	}
@@ -199,7 +199,7 @@ func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme Scheme) er
 		return err
 	}
 
-	err = cb(scheme)
+	err = cb(&scheme)
 
 	if err != nil {
 		return scheme.Rollback()

@@ -13,7 +13,7 @@ type Product struct {
 
 // InsertProduct will take a pointer of a product, and insert it
 func InsertProduct(p *Product) octobe.Handler {
-	return func(scheme octobe.Scheme) error {
+	return func(scheme *octobe.Scheme) error {
 		seg := scheme.Segment(`
 			INSERT INTO
 				products(name)
@@ -29,7 +29,7 @@ func InsertProduct(p *Product) octobe.Handler {
 
 // UpdateProduct will take a pointer and update the fields
 func UpdateProduct(p *Product) octobe.Handler {
-	return func(scheme octobe.Scheme) error {
+	return func(scheme *octobe.Scheme) error {
 		seg := scheme.Segment(`
 			UPDATE
 				products
@@ -47,7 +47,7 @@ func UpdateProduct(p *Product) octobe.Handler {
 
 // ProductByID will take an id, and a pointer to scan into
 func ProductByID(id string, p *Product) octobe.Handler {
-	return func(scheme octobe.Scheme) error {
+	return func(scheme *octobe.Scheme) error {
 		seg := scheme.Segment(`
 			SELECT
 				id,
@@ -66,7 +66,7 @@ func ProductByID(id string, p *Product) octobe.Handler {
 
 // Products will take a pointer to append Products into
 func Products(result *[]Product) octobe.Handler {
-	return func(scheme octobe.Scheme) (err error) {
+	return func(scheme *octobe.Scheme) (err error) {
 		seg := scheme.Segment(`
 			SELECT
 				id,

@@ -31,7 +31,7 @@ Run a query with transaction, and with a handler.
 // InsertProduct will take a pointer of a product, and insert it
 // This method could be in a separate package.
 func InsertProduct(p *Product) octobe.Handler {
-  return func(scheme octobe.Scheme) error {
+  return func(scheme *octobe.Scheme) error {
     seg := scheme.Segment(`
       INSERT INTO
         products(name)
@@ -72,7 +72,7 @@ This is a method that can watch the whole transaction, and where you don't have 
 // InsertProduct will take a pointer of a product, and insert it
 // This method could be in a separate package.
 func InsertProduct(p *Product) octobe.Handler {
-  return func(scheme octobe.Scheme) error {
+  return func(scheme *octobe.Scheme) error {
     seg := scheme.Segment(`
       INSERT INTO
         products(name)
@@ -90,7 +90,7 @@ func Method(db *sql.DB, ctx context.Context) error {
   ob := octobe.New(db)
   
   p := Product{Name: "home made baguette"}
-  return ob.WatchTransaction(ctx, func(scheme octobe.Scheme) error {
+  return ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
     return scheme.Handle(InsertProduct(&p))
   })
 }

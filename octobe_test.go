@@ -204,7 +204,7 @@ func TestTransaction_WithHandlers(t *testing.T) {
 	mock.ExpectCommit()
 
 	handler := func(p *Product) octobe.Handler {
-		return func(scheme octobe.Scheme) error {
+		return func(scheme *octobe.Scheme) error {
 			seg := scheme.Segment(`
 				INSERT INTO
 					products(name)
@@ -226,7 +226,7 @@ func TestTransaction_WithHandlers(t *testing.T) {
 	assert.NoError(t, err, "handler should not return error")
 
 	handler2 := func(result *[]Product) octobe.Handler {
-		return func(scheme octobe.Scheme) error {
+		return func(scheme *octobe.Scheme) error {
 			seg := scheme.Segment(`
 				SELECT
 					id,
