@@ -154,7 +154,7 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 }
 
 // Insert will perform a query, and will also take destination pointers
-// for returning data
+// for returning data. Use Exec of Insert if you do not expect returning values
 func (segment *Segment) Insert(dest ...interface{}) error {
 	if segment.used {
 		return ErrUsed
