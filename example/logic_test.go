@@ -1,6 +1,7 @@
 package example_test
 
 import (
+	"database/sql"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Kansuler/octobe"
 	"github.com/Kansuler/octobe/example"
@@ -18,7 +19,7 @@ func TestRun(t *testing.T) {
 
 	mock.ExpectQuery("SELECT id, name FROM products").WithArgs("123").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow("123", "test product"))
 
-	ob := octobe.New(db)
+	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
 	err = example.Run(&ob)
 	assert.NoError(t, err)
 }
@@ -35,7 +36,7 @@ func TestRunTx(t *testing.T) {
 	mock.ExpectQuery("INSERT INTO").WithArgs("Foo product").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("123"))
 	mock.ExpectCommit()
 
-	ob := octobe.New(db)
+	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
 	err = example.RunTx(&ob)
 	assert.NoError(t, err)
 }
@@ -52,7 +53,7 @@ func TestRunWatchTransaction(t *testing.T) {
 	mock.ExpectQuery("INSERT INTO").WithArgs("test").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("123"))
 	mock.ExpectCommit()
 
-	ob := octobe.New(db)
+	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
 	err = example.RunWatchTransaction(&ob)
 	assert.NoError(t, err)
 }

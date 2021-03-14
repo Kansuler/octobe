@@ -108,10 +108,12 @@ func TestTransaction(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectQuery("UPDATE products").WithArgs(1, "bar").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery("SELECT").WithArgs(1).WillReturnError(sql.ErrNoRows)
 	mock.ExpectCommit()
 
 	ctx := context.Background()
-	ob := octobe.New(db)
+	// Suppress sql.ErrNoRows
+	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows), octobe.SuppressError(sql.ErrTxDone))
 	tx, err := ob.BeginTx(ctx, nil)
 	assert.NoError(t, err, "does not expect begin transaction go get error")
 	var id int
@@ -130,6 +132,11 @@ func TestTransaction(t *testing.T) {
 	err = seg.Insert(&id)
 	assert.NoError(t, err, "should not return any error")
 	assert.Equal(t, 1, id, "id should be 1")
+
+	seg = tx.Segment(`SELECT * FROM products WHERE id = $1`)
+	seg.Arguments(1)
+	err = seg.QueryRow(&id)
+	assert.NoError(t, err, "sql.ErrNoRows should now occur")
 
 	err = tx.Commit()
 	assert.NoError(t, err, "commit shouldn't return any error")

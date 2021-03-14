@@ -11,7 +11,7 @@ A slim golang package for programmers that love to write raw SQL, but has a prob
 Run a simple query
 ```go
 func Method(db *sql.DB, ctx context.Context) (p product, err error) {
-  ob := octobe.New(db)
+  ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
   scheme := ob.Begin(ctx)
   
   seg := scheme.Segment(`
