@@ -18,6 +18,7 @@ func New(db *sql.DB) Octobe {
 
 // ErrUsed is an error that emits if used is true on Segment.
 var ErrUsed = errors.New("this query has already executed")
+var ErrNeedInput = errors.New("insert method require at least one argument")
 
 // Scheme holds context for the duration of the transaction
 type Scheme struct {
@@ -155,9 +156,14 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 
 // Insert will perform a query, and will also take destination pointers
 // for returning data. Use Exec of Insert if you do not expect returning values
+// Insert needs at least one argument, otherwise use Exec
 func (segment *Segment) Insert(dest ...interface{}) error {
 	if segment.used {
 		return ErrUsed
+	}
+
+	if len(dest) == 0 {
+		return ErrNeedInput
 	}
 
 	defer segment.use()
