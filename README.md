@@ -24,7 +24,7 @@ func Method(db *sql.DB, ctx context.Context) error {
   scheme := ob.Begin(ctx)
 
   var p1 Product
-  // Handle a database query in another
+  // Handle a database query in another method, perfect for separating out queries to a database package
   err := scheme.Handle(SelectNameHandler(1, &p1))
   if err != nil {
     return err
@@ -149,6 +149,7 @@ func InsertProduct(p *Product) octobe.Handler {
 
     seg.Arguments(p.Name)
 
+    // Insert is a helper method to do QueryRow and scan of RETURNING from query.
     return seg.Insert(&p.ID)
   }
 }
