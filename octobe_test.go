@@ -121,10 +121,10 @@ func TestTransaction(t *testing.T) {
 	ctx := context.Background()
 	// Suppress sql.ErrNoRows
 	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows), octobe.SuppressError(sql.ErrTxDone))
-	tx, err := ob.BeginTx(ctx, nil)
+	scheme, err := ob.BeginTx(ctx, nil)
 	assert.NoError(t, err, "does not expect begin transaction go get error")
 	var id int
-	seg := tx.Segment(`
+	seg := scheme.Segment(`
 		UPDATE
 			products
 		SET
@@ -140,12 +140,12 @@ func TestTransaction(t *testing.T) {
 	assert.NoError(t, err, "should not return any error")
 	assert.Equal(t, 1, id, "id should be 1")
 
-	seg = tx.Segment(`SELECT * FROM products WHERE id = $1`)
+	seg = scheme.Segment(`SELECT * FROM products WHERE id = $1`)
 	seg.Arguments(1)
 	err = seg.QueryRow(&id)
 	assert.NoError(t, err, "sql.ErrNoRows should now occur")
 
-	err = tx.Commit()
+	err = scheme.Commit()
 	assert.NoError(t, err, "commit shouldn't return any error")
 
 	// we make sure that all expectations were met
@@ -169,15 +169,15 @@ func TestTransaction_WatchRollback(t *testing.T) {
 		ctx := context.Background()
 		ob := octobe.New(db)
 
-		tx, err := ob.BeginTx(ctx, nil)
+		scheme, err := ob.BeginTx(ctx, nil)
 		assert.NoError(t, err, "does not expect begin transaction go get error")
 
-		defer tx.WatchRollback(func() error {
+		defer scheme.WatchRollback(func() error {
 			return err
 		})
 
 		var id int
-		seg := tx.Segment(`
+		seg := scheme.Segment(`
 			UPDATE
 				products
 			SET
@@ -197,7 +197,7 @@ func TestTransaction_WatchRollback(t *testing.T) {
 			return
 		}
 
-		err = tx.Commit()
+		err = scheme.Commit()
 		assert.NoError(t, err, "commit shouldn't emit error")
 	}()
 
