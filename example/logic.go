@@ -55,13 +55,7 @@ func RunWatchTransaction(ob *octobe.Octobe) error {
 
 	// WatchTransaction will start a transaction against database, if func returns
 	// error it will perform a rollback of transaction. If err is nil it will do commit
-	err := ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
+	return ob.WatchTransaction(ctx, func(scheme *octobe.TxScheme) error {
 		return scheme.Handle(database.InsertProduct(&database.Product{Name: "test"}))
 	})
-
-	if err != nil {
-		// log error
-	}
-
-	return err
 }
