@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Kansuler/octobe"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 type Product struct {
@@ -38,12 +39,18 @@ func TestQuery(t *testing.T) {
 			id = $1
 	`)
 	seg.Arguments(1)
-	err = seg.Exec()
 
+	execResult, err := seg.Exec()
+	rows, err := execResult.RowsAffected()
+	id, err := execResult.LastInsertId()
+	assert.NoError(t, err, "rows affected should not return an error")
+	assert.Equal(t, rows, int64(1), "rows affected should be one")
+	assert.NoError(t, err, "last id should not return an error")
+	assert.Equal(t, id, int64(1), "id should should be one")
 	assert.NoError(t, err, "execution should not return error")
 
 	// Segment should not be able to be executed twice
-	err = seg.Exec()
+	_, err = seg.Exec()
 	assert.Error(t, err, "executing the same seg twice should error")
 
 	var result []Product

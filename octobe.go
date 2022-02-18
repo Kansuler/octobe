@@ -117,20 +117,20 @@ func (segment *Segment) Arguments(args ...interface{}) {
 }
 
 // Exec will execute a query. Used for inserts or updates
-func (segment *Segment) Exec() error {
+func (segment *Segment) Exec() (result sql.Result, err error) {
 	if segment.used {
-		return suppressErrors(ErrUsed, segment.suppressErrs)
+		return nil, suppressErrors(ErrUsed, segment.suppressErrs)
 	}
 
 	defer segment.use()
 
 	if segment.tx != nil {
-		_, err := segment.tx.ExecContext(segment.ctx, segment.query, segment.args...)
-		return suppressErrors(err, segment.suppressErrs)
+		result, err = segment.tx.ExecContext(segment.ctx, segment.query, segment.args...)
+		return result, suppressErrors(err, segment.suppressErrs)
 	}
 
-	_, err := segment.db.ExecContext(segment.ctx, segment.query, segment.args...)
-	return suppressErrors(err, segment.suppressErrs)
+	result, err = segment.db.ExecContext(segment.ctx, segment.query, segment.args...)
+	return result, suppressErrors(err, segment.suppressErrs)
 }
 
 // QueryRow will return one result and put them into destination pointers

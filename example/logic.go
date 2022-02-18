@@ -2,6 +2,7 @@ package example
 
 import (
 	"context"
+
 	"github.com/Kansuler/octobe"
 	"github.com/Kansuler/octobe/example/database"
 )

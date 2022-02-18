@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+
 	"github.com/Kansuler/octobe"
 )
 
@@ -41,7 +42,8 @@ func UpdateProduct(p *Product) octobe.Handler {
 
 		seg.Arguments(p.ID, p.Name)
 
-		return seg.Exec()
+		_, err := seg.Exec()
+		return err
 	}
 }
 
