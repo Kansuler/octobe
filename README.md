@@ -1,11 +1,12 @@
 # ![Alt text](https://raw.github.com/Kansuler/octobe/master/doc/octobe_logo.svg)
 
-![License](https://img.shields.io/github/license/Kansuler/octobe) ![Tag](https://img.shields.io/github/v/tag/Kansuler/octobe) ![Version](https://img.shields.io/github/go-mod/go-version/Kansuler/octobe) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/492e6729782b471788994a72f2359f39)](https://www.codacy.com/gh/Kansuler/octobe/dashboard?utm_source=github.com&utm_medium=referral&utm_content=Kansuler/octobe&utm_campaign=Badge_Grade)
+![License](https://img.shields.io/github/license/Kansuler/octobe) ![Tag](https://img.shields.io/github/v/tag/Kansuler/octobe) ![Version](https://img.shields.io/github/go-mod/go-version/Kansuler/octobe) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/492e6729782b471788994a72f2359f39)](https://www.codacy.com/gh/Kansuler/octobe/dashboard?utm_source=github.com&utm_medium=referral&utm_content=Kansuler/octobe&utm_campaign=Badge_Grade) [![Go Reference](https://pkg.go.dev/badge/github.com/Kansuler/octobe.svg)](https://pkg.go.dev/github.com/Kansuler/octobe)
 
 A slim golang package for programmers that love to write raw SQL, but has a problem with boilerplate code. This package will help you structure and unify the way you work with your database.
 
 The main advantage with this library is to enable developers to build a predictable and consistent database layer without losing the feeling of freedom. The octobe library draws inspiration from http handlers, but where handlers interface with the database instead.
 
+Read package documentation at
 [https://pkg.go.dev/github.com/Kansuler/octobe](https://pkg.go.dev/github.com/Kansuler/octobe)
 
 ## Usage
