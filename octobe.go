@@ -54,7 +54,7 @@ var ErrUsed = errors.New("this query has already executed")
 // ErrNeedInput is an error that require inputs for the inser method
 var ErrNeedInput = errors.New("insert method require at least one argument")
 
-// Scheme holds context for the duration of the transaction
+// Scheme holds context for the duration of the operation
 type Scheme struct {
 
 	// db is the database instance
@@ -65,6 +65,7 @@ type Scheme struct {
 	suppressErrs []error
 }
 
+// TxScheme holds context for the duration of the transaction
 type TxScheme struct {
 	Scheme
 	// tx is the database transaction, initiated by BeginTx
