@@ -15,7 +15,7 @@ func SuppressError(err error) Option {
 	return suppressError{err: err}
 }
 
-// structureOptions helper function that convert slice of Option into an option struct
+// convertOptions helper function that convert slice of Option into an option struct
 func convertOptions(opts ...Option) (opt option) {
 	for _, option := range opts {
 		switch option.Type() {

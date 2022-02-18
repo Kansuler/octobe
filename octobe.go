@@ -250,7 +250,7 @@ func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) e
 	return suppressErrors(scheme.Commit(), ob.option.suppressErrs)
 }
 
-// suppressNoRows is a helper function that suppress sql.ErrNoRows
+// suppressErrors is a helper function that suppress sql.ErrNoRows
 func suppressErrors(err error, errs []error) error {
 	for _, suppressErr := range errs {
 		if err == suppressErr {
