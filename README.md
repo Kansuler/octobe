@@ -4,27 +4,55 @@
 
 A slim golang package for programmers that love to write raw SQL, but has a problem with boilerplate code. This package will help you structure and unify the way you work with your database.
 
+The main advantage with this library is to enable developers to build a predictable and consistent database layer without losing the feeling of freedom. The octobe library draws inspiration from http handlers, but where handlers interface with the database instead.
+
 [https://pkg.go.dev/github.com/Kansuler/octobe](https://pkg.go.dev/github.com/Kansuler/octobe)
 
 ## Usage
 
-### Basic
+### Basic Handler
 
-Run a simple query
+Run a simple query where you chain database handlers.
 
 ```go
-func Method(db *sql.DB, ctx context.Context) (p product, err error) {
+func Method(db *sql.DB, ctx context.Context) error {
+  // New creates an octobe context around an *sql.DB instance
+  // SuppressError is option and can be used to ignore specific errors, like sql.ErrNoRows"
   ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
+
+  // Begin is used to start without a database transaction
   scheme := ob.Begin(ctx)
 
-  seg := scheme.Segment(`
-    SELECT name FROM products WHERE id = $1;
-  `)
+  var p1 Product
+  // Handle a database query in another
+  err := scheme.Handle(SelectNameHandler(1, &p1))
+  if err != nil {
+    return err
+  }
 
-  seg.Arguments(1)
+  var p2 Product
+  err := scheme.Handle(SelectNameHandler(2, &p2))
+    if err != nil {
+    return err
+  }
 
-  err = seg.QueryRow(&p.Name)
   return
+}
+
+// Handler func that implements the octobe.Handler
+func SelectNameHandler(id string, p *Product) octobe.Handler {
+  return func(scheme *octobe.Scheme) error {
+    // A segment is a specific query, you can chain many queries in here, or split chained logic into multiple handler funcs if you'd like.
+    seg := scheme.Segment(`
+      SELECT name FROM products WHERE id = $1;
+    `)
+
+    // Arguments takes any input to the query
+    seg.Arguments(id)
+
+    // Segment has all the normal methods you expect such as QueryRow, Query and Exec.
+    return seg.QueryRow(&p.Name)
+  }
 }
 ```
 
@@ -33,6 +61,29 @@ func Method(db *sql.DB, ctx context.Context) (p product, err error) {
 Run a query with transaction, and with a handler.
 
 ```go
+func Method(db *sql.DB, ctx context.Context) error {
+  ob := octobe.New(db)
+  scheme, err := ob.BeginTx(ctx)
+  if err != nil {
+    return err
+  }
+
+  // WatchRollback returns error that is defined in the scope of this Method.
+  // if err is not nil, octobe will perform a rollback.
+  defer scheme.WatchRollback(func() error {
+    return err
+  })
+
+  p := Product{Name: "home made baguette"}
+  err = scheme.Handle(InsertProduct(&p))
+  if err != nil {
+    return err
+  }
+
+  // Finish with a commit
+  return scheme.Commit()
+}
+
 // InsertProduct will take a pointer of a product, and insert it
 // This method could be in a separate package.
 func InsertProduct(p *Product) octobe.Handler {
@@ -48,26 +99,6 @@ func InsertProduct(p *Product) octobe.Handler {
 
     return seg.Insert(&p.ID)
   }
-}
-
-func Method(db *sql.DB, ctx context.Context) error {
-  ob := octobe.New(db)
-  scheme, err := ob.BeginTx(ctx)
-  if err != nil {
-    return err
-  }
-
-  defer scheme.WatchRollback(func() error {
-    return err
-  })
-
-  p := Product{Name: "home made baguette"}
-  err = scheme.Handle(InsertProduct(&p))
-  if err != nil {
-    return err
-  }
-
-  return scheme.Commit()
 }
 ```
 
