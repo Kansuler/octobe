@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
 // Octobe struct that holds the database session
@@ -30,8 +31,27 @@ func New(db *sql.DB, opts ...Option) Octobe {
 	return Octobe{DB: db, option: convertOptions(opts...)}
 }
 
+type octobeError struct {
+	original error
+	txError  error
+}
+
+func (err octobeError) Error() string {
+	return fmt.Sprintf("%s, %s", err.original, err.txError)
+}
+
+func (err octobeError) Unwrap() error {
+	return err.txError
+}
+
+func (err octobeError) Is(target error) bool {
+	return errors.Is(err.original, target)
+}
+
 // ErrUsed is an error that emits if used is true on Segment.
 var ErrUsed = errors.New("this query has already executed")
+
+// ErrNeedInput is an error that require inputs for the inser method
 var ErrNeedInput = errors.New("insert method require at least one argument")
 
 // Scheme holds context for the duration of the transaction
@@ -176,8 +196,10 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 
 	err = cb(rows)
 	if err != nil {
-		_ = rows.Close()
-		return err
+		return octobeError{
+			original: err,
+			txError:  rows.Close(),
+		}
 	}
 
 	return rows.Close()
@@ -223,10 +245,14 @@ func (scheme *Scheme) Rollback() error {
 // WatchRollback will perform a rollback if an error is given
 // This method can be used as a defer in the function that performs
 // the database operations.
-func (scheme *Scheme) WatchRollback(cb func() error) {
-	if cb() != nil {
-		_ = scheme.tx.Rollback()
+func (scheme *Scheme) WatchRollback(cb func() error) error {
+	if err := cb(); err != nil {
+		return octobeError{
+			original: err,
+			txError:  scheme.Rollback(),
+		}
 	}
+	return nil
 }
 
 // WatchTransaction will perform the whole transaction, or do rollback if error occurred.
@@ -240,14 +266,16 @@ func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) e
 		return suppressErrors(err, ob.option.suppressErrs)
 	}
 
-	err = cb(&scheme)
+	err = suppressErrors(cb(&scheme), ob.option.suppressErrs)
 
 	if err != nil {
-		_ = scheme.Rollback()
-		return suppressErrors(err, ob.option.suppressErrs)
+		return octobeError{
+			original: err,
+			txError:  scheme.Rollback(),
+		}
 	}
 
-	return suppressErrors(scheme.Commit(), ob.option.suppressErrs)
+	return scheme.Commit()
 }
 
 // suppressErrors is a helper function that suppress sql.ErrNoRows
