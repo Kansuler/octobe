@@ -106,6 +106,8 @@ func InsertProduct(p *Product) octobe.Handler {
 
 This is a method that can watch the whole transaction, and where you don't have to define rollback or commit.
 
+WatchTransaction will rollback in case error is returned, otherwise it will proceed to commit.
+
 ```go
 // InsertProduct will take a pointer of a product, and insert it
 // This method could be in a separate package.
@@ -127,9 +129,27 @@ func InsertProduct(p *Product) octobe.Handler {
 func Method(db *sql.DB, ctx context.Context) error {
   ob := octobe.New(db)
 
-  p := Product{Name: "home made baguette"}
+  // Example of chaining multiple handlers in a transaction
   return ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
-    return scheme.Handle(InsertProduct(&p))
+    p1 := Product{Name: "home made baguette"}
+    err := scheme.Handle(InsertProduct(&p1))
+    if err != nil {
+      return err
+    }
+
+    // Execute other non-database logic that can return an error and rollback the transaction
+    err = anotherFunctionWithLogic()
+    if err != nil {
+      return err
+    }
+
+    p2 := Product{Name: "another home made baguette"}
+    err = scheme.Handle(InsertProduct(&p2))
+    if err != nil {
+      return err
+    }
+
+    return nil
   })
 }
 ```
