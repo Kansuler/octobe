@@ -109,23 +109,6 @@ This is a method that can watch the whole transaction, and where you don't have 
 WatchTransaction will rollback in case error is returned, otherwise it will proceed to commit.
 
 ```go
-// InsertProduct will take a pointer of a product, and insert it
-// This method could be in a separate package.
-func InsertProduct(p *Product) octobe.Handler {
-  return func(scheme *octobe.Scheme) error {
-    seg := scheme.Segment(`
-      INSERT INTO
-        products(name)
-      VALUES($1)
-      RETURNING id
-    `)
-
-    seg.Arguments(p.Name)
-
-    return seg.Insert(&p.ID)
-  }
-}
-
 func Method(db *sql.DB, ctx context.Context) error {
   ob := octobe.New(db)
 
@@ -151,6 +134,23 @@ func Method(db *sql.DB, ctx context.Context) error {
 
     return nil
   })
+}
+
+// InsertProduct will take a pointer of a product, and insert it
+// This method could be in a separate package.
+func InsertProduct(p *Product) octobe.Handler {
+  return func(scheme *octobe.Scheme) error {
+    seg := scheme.Segment(`
+      INSERT INTO
+        products(name)
+      VALUES($1)
+      RETURNING id
+    `)
+
+    seg.Arguments(p.Name)
+
+    return seg.Insert(&p.ID)
+  }
 }
 ```
 
