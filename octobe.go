@@ -48,6 +48,10 @@ func (err octobeError) Is(target error) bool {
 	return errors.Is(err.original, target)
 }
 
+func (err octobeError) As(target interface{}) bool {
+	return errors.As(err.original, target)
+}
+
 // ErrUsed is an error that emits if used is true on Segment.
 var ErrUsed = errors.New("this query has already executed")
 
