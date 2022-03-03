@@ -134,9 +134,7 @@ func TestTransaction(t *testing.T) {
 		RETURNING id
 	`)
 	seg.Arguments(1, "bar")
-	err = seg.Insert()
-	assert.Error(t, err, "should return error on no arguments in .Insert")
-	err = seg.Insert(&id)
+	err = seg.QueryRow(&id)
 	assert.NoError(t, err, "should not return any error")
 	assert.Equal(t, 1, id, "id should be 1")
 
@@ -188,7 +186,7 @@ func TestTransaction_WatchRollback(t *testing.T) {
 				id
 		`)
 		seg.Arguments(1, "bar")
-		err = seg.Insert(&id)
+		err = seg.QueryRow(&id)
 		assert.NoError(t, err, "should not return any error")
 		assert.Equal(t, 1, id, "id should be 1")
 
@@ -230,7 +228,7 @@ func TestTransaction_WithHandlers(t *testing.T) {
 
 			seg.Arguments(p.Name)
 
-			return seg.Insert(&p.ID)
+			return seg.QueryRow(&p.ID)
 		}
 	}
 

@@ -24,7 +24,7 @@ func InsertProduct(p *Product) octobe.Handler {
 
 		seg.Arguments(p.Name)
 
-		return seg.Insert(&p.ID)
+		return seg.QueryRow(&p.ID)
 	}
 }
 

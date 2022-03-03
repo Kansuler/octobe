@@ -98,7 +98,8 @@ func InsertProduct(p *Product) octobe.Handler {
 
     seg.Arguments(p.Name)
 
-    return seg.Insert(&p.ID)
+    // QueryRow and scan of RETURNING from query.
+    return seg.QueryRow(&p.ID)
   }
 }
 ```
@@ -150,8 +151,8 @@ func InsertProduct(p *Product) octobe.Handler {
 
     seg.Arguments(p.Name)
 
-    // Insert is a helper method to do QueryRow and scan of RETURNING from query.
-    return seg.Insert(&p.ID)
+    // QueryRow and scan of RETURNING from query.
+    return seg.QueryRow(&p.ID)
   }
 }
 ```

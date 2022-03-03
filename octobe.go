@@ -209,33 +209,6 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 	return rows.Close()
 }
 
-// Insert will perform a query, and will also take destination pointers
-// for returning data. Use Exec of Insert if you do not expect returning values
-// Insert needs at least one argument, otherwise use Exec
-func (segment *Segment) Insert(dest ...interface{}) error {
-	if segment.used {
-		return suppressErrors(ErrUsed, segment.suppressErrs)
-	}
-
-	if len(dest) == 0 {
-		return suppressErrors(ErrNeedInput, segment.suppressErrs)
-	}
-
-	defer segment.use()
-
-	if segment.tx != nil {
-		return suppressErrors(
-			segment.tx.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...),
-			segment.suppressErrs,
-		)
-	}
-
-	return suppressErrors(
-		segment.db.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...),
-		segment.suppressErrs,
-	)
-}
-
 // Commit will commit a transaction
 func (scheme *Scheme) Commit() error {
 	if scheme.tx == nil {
