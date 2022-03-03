@@ -11,8 +11,6 @@ import (
 type Octobe struct {
 	// DB is the database instance
 	DB *sql.DB
-	// option global options for this Octobe instance
-	option option
 }
 
 // Option interface that tells what type of option it is
@@ -27,8 +25,8 @@ type option struct {
 }
 
 // New initiates a DB instance and connection.
-func New(db *sql.DB, opts ...Option) Octobe {
-	return Octobe{DB: db, option: convertOptions(opts...)}
+func New(db *sql.DB) Octobe {
+	return Octobe{DB: db}
 }
 
 type octobeError struct {
@@ -66,8 +64,6 @@ type Scheme struct {
 	db *sql.DB
 	// ctx is a context that can be used to interrupt a query
 	ctx context.Context
-	// suppressErrs is an array of errors that will not bubble up from sql package
-	suppressErrs []error
 }
 
 // Handler is a signature that can be used for handling
@@ -75,8 +71,9 @@ type Scheme struct {
 type Handler func(scheme *Scheme) error
 
 // Handle is a method that handle a handler
-func (scheme *Scheme) Handle(handler Handler) error {
-	return handler(scheme)
+func (scheme *Scheme) Handle(handler Handler, opts ...Option) error {
+	opt := convertOptions(opts...)
+	return suppressErrors(handler(scheme), opt.suppressErrs)
 }
 
 // BeginTx initiates a transaction against database
@@ -85,7 +82,6 @@ func (ob Octobe) BeginTx(ctx context.Context, opts ...*sql.TxOptions) (scheme Sc
 		opts = append(opts, &sql.TxOptions{})
 	}
 
-	scheme.suppressErrs = ob.option.suppressErrs
 	scheme.tx, err = ob.DB.BeginTx(ctx, opts[0])
 	scheme.db = ob.DB
 	scheme.ctx = ctx
@@ -94,7 +90,6 @@ func (ob Octobe) BeginTx(ctx context.Context, opts ...*sql.TxOptions) (scheme Sc
 
 // Begin initiates a query run, but not as a transaction
 func (ob Octobe) Begin(ctx context.Context) (scheme Scheme) {
-	scheme.suppressErrs = ob.option.suppressErrs
 	scheme.db = ob.DB
 	scheme.ctx = ctx
 	return
@@ -114,8 +109,6 @@ type Segment struct {
 	db *sql.DB
 	// ctx is a context that can be used to interrupt a query
 	ctx context.Context
-	// suppressErrs is an array of errors that will not bubble up from sql package
-	suppressErrs []error
 }
 
 // use will set used to true after a segment has been performed
@@ -126,12 +119,11 @@ func (segment *Segment) use() {
 // Segment created a new query segment
 func (scheme *Scheme) Segment(query string) *Segment {
 	return &Segment{
-		query:        query,
-		args:         nil,
-		tx:           nil,
-		db:           scheme.db,
-		ctx:          scheme.ctx,
-		suppressErrs: scheme.suppressErrs,
+		query: query,
+		args:  nil,
+		tx:    nil,
+		db:    scheme.db,
+		ctx:   scheme.ctx,
 	}
 }
 
@@ -143,45 +135,39 @@ func (segment *Segment) Arguments(args ...interface{}) {
 // Exec will execute a query. Used for inserts or updates
 func (segment *Segment) Exec() (result sql.Result, err error) {
 	if segment.used {
-		return nil, suppressErrors(ErrUsed, segment.suppressErrs)
+		return nil, ErrUsed
 	}
 
 	defer segment.use()
 
 	if segment.tx != nil {
 		result, err = segment.tx.ExecContext(segment.ctx, segment.query, segment.args...)
-		return result, suppressErrors(err, segment.suppressErrs)
+		return result, err
 	}
 
 	result, err = segment.db.ExecContext(segment.ctx, segment.query, segment.args...)
-	return result, suppressErrors(err, segment.suppressErrs)
+	return result, err
 }
 
 // QueryRow will return one result and put them into destination pointers
 func (segment *Segment) QueryRow(dest ...interface{}) error {
 	if segment.used {
-		return suppressErrors(ErrUsed, segment.suppressErrs)
+		return ErrUsed
 	}
 
 	defer segment.use()
 
 	if segment.tx != nil {
-		return suppressErrors(
-			segment.tx.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...),
-			segment.suppressErrs,
-		)
+		return segment.tx.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...)
 	}
 
-	return suppressErrors(
-		segment.db.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...),
-		segment.suppressErrs,
-	)
+	return segment.db.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...)
 }
 
 // Query will perform a normal query against database that returns rows
 func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 	if segment.used {
-		return suppressErrors(ErrUsed, segment.suppressErrs)
+		return ErrUsed
 	}
 
 	defer segment.use()
@@ -194,7 +180,7 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 		rows, err = segment.db.QueryContext(segment.ctx, segment.query, segment.args...)
 	}
 
-	if suppressErrors(err, segment.suppressErrs) != nil {
+	if err != nil {
 		return err
 	}
 
@@ -215,7 +201,7 @@ func (scheme *Scheme) Commit() error {
 		return nil
 	}
 
-	return suppressErrors(scheme.tx.Commit(), scheme.suppressErrs)
+	return scheme.tx.Commit()
 }
 
 // Rollback will rollback a transaction
@@ -224,7 +210,7 @@ func (scheme *Scheme) Rollback() error {
 		return nil
 	}
 
-	return suppressErrors(scheme.tx.Rollback(), scheme.suppressErrs)
+	return scheme.tx.Rollback()
 }
 
 // WatchRollback will perform a rollback if an error is given
@@ -252,10 +238,10 @@ func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) e
 
 	scheme, err := ob.BeginTx(ctx, opts[0])
 	if err != nil {
-		return suppressErrors(err, ob.option.suppressErrs)
+		return err
 	}
 
-	err = suppressErrors(cb(&scheme), ob.option.suppressErrs)
+	err = cb(&scheme)
 
 	if err != nil {
 		return octobeError{

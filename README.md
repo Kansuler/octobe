@@ -11,55 +11,63 @@ Read package documentation at
 
 ## Usage
 
-### Basic Handler
+### WatchTransaction
 
-Run a simple query where you chain database handlers.
+This is a method that can watch the whole transaction, and where you don't have to define rollback or commit.
+
+WatchTransaction will rollback in case error is returned, otherwise it will proceed to commit.
 
 ```go
 func Method(db *sql.DB, ctx context.Context) error {
-  // New creates an octobe context around an *sql.DB instance
-  // SuppressError is option and can be used to ignore specific errors, like sql.ErrNoRows"
-  ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
+  ob := octobe.New(db)
 
-  // Begin is used to start without a database transaction
-  scheme := ob.Begin(ctx)
-
-  var p1 Product
-  // Handle a database query in another method, perfect for separating out queries to a database package
-  err := scheme.Handle(SelectNameHandler(1, &p1))
-  if err != nil {
-    return err
-  }
-
-  var p2 Product
-  err := scheme.Handle(SelectNameHandler(2, &p2))
+  // Example of chaining multiple handlers in a transaction
+  return ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
+    p1 := Product{Name: "home made baguette"}
+    err := scheme.Handle(InsertProduct(&p1))
     if err != nil {
-    return err
-  }
+      return err
+    }
 
-  return
+    // Execute other non-database logic that can return an error and rollback the transaction
+    err = anotherFunctionWithLogic()
+    if err != nil {
+      return err
+    }
+
+    p2 := Product{Name: "another home made baguette"}
+    // For illustration, you can also suppress specific errors in the scheme handler
+    err = scheme.Handle(InsertProduct(&p2), octobe.SuppressError(sql.ErrNoRows), octobe.SuppressError(sql.ErrTxDone))
+    if err != nil {
+      return err
+    }
+
+    return nil
+  })
 }
 
-// Handler func that implements the octobe.Handler
-func SelectNameHandler(id string, p *Product) octobe.Handler {
+// InsertProduct will take a pointer of a product, and insert it
+// This method could be in a separate package.
+func InsertProduct(p *Product) octobe.Handler {
   return func(scheme *octobe.Scheme) error {
-    // A segment is a specific query, you can chain many queries in here, or split chained logic into multiple handler funcs if you'd like.
     seg := scheme.Segment(`
-      SELECT name FROM products WHERE id = $1;
+      INSERT INTO
+        products(name)
+      VALUES($1)
+      RETURNING id
     `)
 
-    // Arguments takes any input to the query
-    seg.Arguments(id)
+    seg.Arguments(p.Name)
 
-    // Segment has all the normal methods you expect such as QueryRow, Query and Exec.
-    return seg.QueryRow(&p.Name)
+    // QueryRow and scan of RETURNING from query.
+    return seg.QueryRow(&p.ID)
   }
 }
 ```
 
 ### Transaction
 
-Run a query with transaction, and with a handler.
+Run a query with transaction, and chain handlers.
 
 ```go
 func Method(db *sql.DB, ctx context.Context) error {
@@ -104,55 +112,48 @@ func InsertProduct(p *Product) octobe.Handler {
 }
 ```
 
-### WatchTransaction
+### Basic Handler
 
-This is a method that can watch the whole transaction, and where you don't have to define rollback or commit.
-
-WatchTransaction will rollback in case error is returned, otherwise it will proceed to commit.
+Run a simple query where you chain database handlers.
 
 ```go
 func Method(db *sql.DB, ctx context.Context) error {
-  ob := octobe.New(db)
+  // New creates an octobe context around an *sql.DB instance
+  // SuppressError is option and can be used to ignore specific errors, like sql.ErrNoRows"
+  ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
 
-  // Example of chaining multiple handlers in a transaction
-  return ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
-    p1 := Product{Name: "home made baguette"}
-    err := scheme.Handle(InsertProduct(&p1))
+  // Begin is used to start without a database transaction
+  scheme := ob.Begin(ctx)
+
+  var p1 Product
+  // Handle a database query in another method, perfect for separating out queries to a database package
+  err := scheme.Handle(SelectNameHandler(1, &p1))
+  if err != nil {
+    return err
+  }
+
+  var p2 Product
+  err := scheme.Handle(SelectNameHandler(2, &p2))
     if err != nil {
-      return err
-    }
+    return err
+  }
 
-    // Execute other non-database logic that can return an error and rollback the transaction
-    err = anotherFunctionWithLogic()
-    if err != nil {
-      return err
-    }
-
-    p2 := Product{Name: "another home made baguette"}
-    err = scheme.Handle(InsertProduct(&p2))
-    if err != nil {
-      return err
-    }
-
-    return nil
-  })
+  return
 }
 
-// InsertProduct will take a pointer of a product, and insert it
-// This method could be in a separate package.
-func InsertProduct(p *Product) octobe.Handler {
+// Handler func that implements the octobe.Handler
+func SelectNameHandler(id string, p *Product) octobe.Handler {
   return func(scheme *octobe.Scheme) error {
+    // A segment is a specific query, you can chain many queries in here, or split chained logic into multiple handler funcs if you'd like.
     seg := scheme.Segment(`
-      INSERT INTO
-        products(name)
-      VALUES($1)
-      RETURNING id
+      SELECT name FROM products WHERE id = $1;
     `)
 
-    seg.Arguments(p.Name)
+    // Arguments takes any input to the query
+    seg.Arguments(id)
 
-    // QueryRow and scan of RETURNING from query.
-    return seg.QueryRow(&p.ID)
+    // Segment has all the normal methods you expect such as QueryRow, Query and Exec.
+    return seg.QueryRow(&p.Name)
   }
 }
 ```

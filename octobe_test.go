@@ -119,8 +119,7 @@ func TestTransaction(t *testing.T) {
 	mock.ExpectCommit()
 
 	ctx := context.Background()
-	// Suppress sql.ErrNoRows
-	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows), octobe.SuppressError(sql.ErrTxDone))
+	ob := octobe.New(db)
 	scheme, err := ob.BeginTx(ctx, nil)
 	assert.NoError(t, err, "does not expect begin transaction go get error")
 	var id int
@@ -141,7 +140,7 @@ func TestTransaction(t *testing.T) {
 	seg = scheme.Segment(`SELECT * FROM products WHERE id = $1`)
 	seg.Arguments(1)
 	err = seg.QueryRow(&id)
-	assert.NoError(t, err, "sql.ErrNoRows should now occur")
+	assert.ErrorIs(t, err, sql.ErrNoRows, "sql.ErrNoRows should now occur")
 
 	err = scheme.Commit()
 	assert.NoError(t, err, "commit shouldn't return any error")
@@ -213,6 +212,8 @@ func TestTransaction_WithHandlers(t *testing.T) {
 
 	defer db.Close()
 	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT id, name FROM products").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT id, name FROM products").WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery("INSERT INTO products").WithArgs("Testing").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectQuery("SELECT id, name FROM products").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow("1", "test1").AddRow("2", "test2"))
 	mock.ExpectCommit()
@@ -231,13 +232,6 @@ func TestTransaction_WithHandlers(t *testing.T) {
 			return seg.QueryRow(&p.ID)
 		}
 	}
-
-	ctx := context.Background()
-	octo := octobe.New(db)
-	scheme, err := octo.BeginTx(ctx, nil)
-	assert.NoError(t, err)
-	err = scheme.Handle(handler(&Product{Name: "Testing"}))
-	assert.NoError(t, err, "handler should not return error")
 
 	handler2 := func(result *[]Product) octobe.Handler {
 		return func(scheme *octobe.Scheme) error {
@@ -269,7 +263,23 @@ func TestTransaction_WithHandlers(t *testing.T) {
 		}
 	}
 
+	ctx := context.Background()
+	ob := octobe.New(db)
+	scheme, err := ob.BeginTx(ctx, nil)
+	assert.NoError(t, err)
 	var results []Product
+
+	// Suppressing an error
+	err = scheme.Handle(handler2(&results), octobe.SuppressError(sql.ErrNoRows))
+	assert.NoError(t, err, "handler should not return sql.ErrNoRows")
+
+	// Do not suppress an error
+	err = scheme.Handle(handler2(&results))
+	assert.Error(t, err, "handler should return sql.ErrNoRows")
+
+	err = scheme.Handle(handler(&Product{Name: "Testing"}), octobe.SuppressError(sql.ErrNoRows))
+	assert.NoError(t, err, "handler should not return error")
+
 	err = scheme.Handle(handler2(&results))
 	assert.NoError(t, err)
 	for index, result := range results {

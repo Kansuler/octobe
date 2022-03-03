@@ -2,6 +2,7 @@ package example
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/Kansuler/octobe"
 	"github.com/Kansuler/octobe/example/database"
@@ -41,6 +42,21 @@ func Run(ob *octobe.Octobe) error {
 
 	var p database.Product
 	err := scheme.Handle(database.ProductByID("123", &p))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RunSupress - Retrieve a octobe instance, begin a scheme without a
+// database transaction, fail it and use the SuppressError option for sql.ErrNoRows
+func RunSupress(ob *octobe.Octobe) error {
+	ctx := context.Background()
+	scheme := ob.Begin(ctx)
+
+	var p database.Product
+	err := scheme.Handle(database.ProductByID("123", &p), octobe.SuppressError(sql.ErrNoRows))
 	if err != nil {
 		return err
 	}

@@ -41,7 +41,7 @@ func TestRunFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestRunFailSuppress(t *testing.T) {
+func TestRunFailSupress(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
@@ -49,11 +49,10 @@ func TestRunFailSuppress(t *testing.T) {
 
 	defer db.Close()
 
-	var returnErr = errors.New("an error occurred")
-	mock.ExpectQuery("SELECT id, name FROM products").WithArgs("123").WillReturnError(returnErr)
+	mock.ExpectQuery("SELECT id, name FROM products").WithArgs("123").WillReturnError(sql.ErrNoRows)
 
-	ob := octobe.New(db, octobe.SuppressError(returnErr))
-	err = example.Run(&ob)
+	ob := octobe.New(db)
+	err = example.RunSupress(&ob)
 	assert.NoError(t, err)
 }
 
@@ -91,23 +90,6 @@ func TestRunTxFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestRunTxFailSuppress(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	defer db.Close()
-
-	mock.ExpectBegin()
-	mock.ExpectQuery("INSERT INTO").WithArgs("Foo product").WillReturnError(sql.ErrTxDone)
-	mock.ExpectCommit()
-
-	ob := octobe.New(db, octobe.SuppressError(sql.ErrTxDone))
-	err = example.RunTx(&ob)
-	assert.NoError(t, err)
-}
-
 func TestRunWatchTransaction(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -140,21 +122,4 @@ func TestRunWatchTransactionFail(t *testing.T) {
 	ob := octobe.New(db)
 	err = example.RunWatchTransaction(&ob)
 	assert.Error(t, err)
-}
-
-func TestRunWatchTransactionFailSuppress(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	defer db.Close()
-
-	mock.ExpectBegin()
-	mock.ExpectQuery("INSERT INTO").WithArgs("test").WillReturnError(sql.ErrNoRows)
-	mock.ExpectCommit()
-
-	ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
-	err = example.RunWatchTransaction(&ob)
-	assert.NoError(t, err)
 }
