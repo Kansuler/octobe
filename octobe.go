@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 )
 
 // Octobe struct that holds the database session
@@ -27,27 +26,6 @@ type option struct {
 // New initiates a DB instance and connection.
 func New(db *sql.DB) Octobe {
 	return Octobe{DB: db}
-}
-
-type octobeError struct {
-	original error
-	txError  error
-}
-
-func (err octobeError) Error() string {
-	return fmt.Sprintf("%s, %s", err.original, err.txError)
-}
-
-func (err octobeError) Unwrap() error {
-	return err.txError
-}
-
-func (err octobeError) Is(target error) bool {
-	return errors.Is(err.original, target)
-}
-
-func (err octobeError) As(target interface{}) bool {
-	return errors.As(err.original, target)
 }
 
 // ErrUsed is an error that emits if used is true on Segment.
@@ -186,10 +164,7 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 
 	err = cb(rows)
 	if err != nil {
-		return octobeError{
-			original: err,
-			txError:  rows.Close(),
-		}
+		return errs{err, rows.Close()}
 	}
 
 	return rows.Close()
@@ -222,10 +197,7 @@ func (scheme *Scheme) WatchRollback(cb func() error) error {
 	}
 
 	if err := cb(); err != nil {
-		return octobeError{
-			original: err,
-			txError:  scheme.Rollback(),
-		}
+		return errs{err, scheme.Rollback()}
 	}
 	return nil
 }
@@ -244,10 +216,7 @@ func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) e
 	err = cb(&scheme)
 
 	if err != nil {
-		return octobeError{
-			original: err,
-			txError:  scheme.Rollback(),
-		}
+		return errs{err, scheme.Rollback()}
 	}
 
 	return scheme.Commit()
