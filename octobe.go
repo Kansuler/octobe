@@ -6,6 +6,12 @@ import (
 	"errors"
 )
 
+type dblike interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+}
+
 // Octobe struct that holds the database session
 type Octobe struct {
 	// DB is the database instance
@@ -36,10 +42,7 @@ var ErrNeedInput = errors.New("insert method require at least one argument")
 
 // Scheme holds context for the duration of the operation
 type Scheme struct {
-	// tx is the database transaction, initiated by BeginTx
-	tx *sql.Tx
-	// db is the database instance
-	db *sql.DB
+	db dblike
 	// ctx is a context that can be used to interrupt a query
 	ctx context.Context
 }
@@ -56,12 +59,12 @@ func (scheme *Scheme) Handle(handler Handler, opts ...Option) error {
 
 // BeginTx initiates a transaction against database
 func (ob Octobe) BeginTx(ctx context.Context, opts ...*sql.TxOptions) (scheme Scheme, err error) {
-	if len(opts) == 0 {
-		opts = append(opts, &sql.TxOptions{})
+	var opt *sql.TxOptions
+	if len(opts) > 0 {
+		opt = opts[0]
 	}
 
-	scheme.tx, err = ob.DB.BeginTx(ctx, opts[0])
-	scheme.db = ob.DB
+	scheme.db, err = ob.DB.BeginTx(ctx, opt)
 	scheme.ctx = ctx
 	return
 }
@@ -82,9 +85,7 @@ type Segment struct {
 	// used specify if this segment already has been executed
 	used bool
 	// tx is the database transaction, initiated by BeginTx
-	tx *sql.Tx
-	// db is the database instance
-	db *sql.DB
+	db dblike
 	// ctx is a context that can be used to interrupt a query
 	ctx context.Context
 }
@@ -99,15 +100,15 @@ func (scheme *Scheme) Segment(query string) *Segment {
 	return &Segment{
 		query: query,
 		args:  nil,
-		tx:    nil,
 		db:    scheme.db,
 		ctx:   scheme.ctx,
 	}
 }
 
 // Arguments receives unknown amount of arguments to use in the query
-func (segment *Segment) Arguments(args ...interface{}) {
+func (segment *Segment) Arguments(args ...interface{}) *Segment {
 	segment.args = args
+	return segment
 }
 
 // Exec will execute a query. Used for inserts or updates
@@ -117,11 +118,6 @@ func (segment *Segment) Exec() (result sql.Result, err error) {
 	}
 
 	defer segment.use()
-
-	if segment.tx != nil {
-		result, err = segment.tx.ExecContext(segment.ctx, segment.query, segment.args...)
-		return result, err
-	}
 
 	result, err = segment.db.ExecContext(segment.ctx, segment.query, segment.args...)
 	return result, err
@@ -135,10 +131,6 @@ func (segment *Segment) QueryRow(dest ...interface{}) error {
 
 	defer segment.use()
 
-	if segment.tx != nil {
-		return segment.tx.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...)
-	}
-
 	return segment.db.QueryRowContext(segment.ctx, segment.query, segment.args...).Scan(dest...)
 }
 
@@ -150,20 +142,12 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 
 	defer segment.use()
 
-	var rows *sql.Rows
-	var err error
-	if segment.tx != nil {
-		rows, err = segment.tx.QueryContext(segment.ctx, segment.query, segment.args...)
-	} else {
-		rows, err = segment.db.QueryContext(segment.ctx, segment.query, segment.args...)
-	}
-
+	rows, err := segment.db.QueryContext(segment.ctx, segment.query, segment.args...)
 	if err != nil {
 		return err
 	}
 
-	err = cb(rows)
-	if err != nil {
+	if err := cb(rows); err != nil {
 		return errs{err, rows.Close()}
 	}
 
@@ -172,30 +156,24 @@ func (segment *Segment) Query(cb func(*sql.Rows) error) error {
 
 // Commit will commit a transaction
 func (scheme *Scheme) Commit() error {
-	if scheme.tx == nil {
-		return nil
+	if asCommit, ok := scheme.db.(interface{ Commit() error }); ok {
+		return asCommit.Commit()
 	}
-
-	return scheme.tx.Commit()
+	return nil
 }
 
 // Rollback will rollback a transaction
 func (scheme *Scheme) Rollback() error {
-	if scheme.tx == nil {
-		return nil
+	if asRollback, ok := scheme.db.(interface{ Rollback() error }); ok {
+		return asRollback.Rollback()
 	}
-
-	return scheme.tx.Rollback()
+	return nil
 }
 
 // WatchRollback will perform a rollback if an error is given
 // This method can be used as a defer in the function that performs
 // the database operations.
 func (scheme *Scheme) WatchRollback(cb func() error) error {
-	if scheme.tx == nil {
-		return nil
-	}
-
 	if err := cb(); err != nil {
 		return errs{err, scheme.Rollback()}
 	}
@@ -204,11 +182,11 @@ func (scheme *Scheme) WatchRollback(cb func() error) error {
 
 // WatchTransaction will perform the whole transaction, or do rollback if error occurred.
 func (ob Octobe) WatchTransaction(ctx context.Context, cb func(scheme *Scheme) error, opts ...*sql.TxOptions) error {
-	if len(opts) == 0 {
-		opts = append(opts, &sql.TxOptions{})
+	var opt *sql.TxOptions
+	if len(opts) > 0 {
+		opt = opts[0]
 	}
-
-	scheme, err := ob.BeginTx(ctx, opts[0])
+	scheme, err := ob.BeginTx(ctx, opt)
 	if err != nil {
 		return err
 	}
