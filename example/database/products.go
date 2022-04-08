@@ -6,14 +6,25 @@ import (
 	"github.com/Kansuler/octobe"
 )
 
+// Database interface that implements the databases, with this you can mock Database.
+type Database interface {
+	InsertProduct(*Product) octobe.Handler
+	UpdateProduct(*Product) octobe.Handler
+	ProductByID(*Product) octobe.Handler
+	Products(*[]Product) octobe.Handler
+}
+
+// Handler implements the database interface
+type Handler struct{}
+
 // Product is an example database model
 type Product struct {
-	ID   string `json:"id"`
+	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
 // InsertProduct will take a pointer of a product, and insert it
-func InsertProduct(p *Product) octobe.Handler {
+func (Handler) InsertProduct(p *Product) octobe.Handler {
 	return func(scheme *octobe.Scheme) error {
 		seg := scheme.Segment(`
 			INSERT INTO
@@ -29,7 +40,7 @@ func InsertProduct(p *Product) octobe.Handler {
 }
 
 // UpdateProduct will take a pointer and update the fields
-func UpdateProduct(p *Product) octobe.Handler {
+func (Handler) UpdateProduct(p *Product) octobe.Handler {
 	return func(scheme *octobe.Scheme) error {
 		seg := scheme.Segment(`
 			UPDATE
@@ -48,7 +59,7 @@ func UpdateProduct(p *Product) octobe.Handler {
 }
 
 // ProductByID will take an id, and a pointer to scan into
-func ProductByID(id string, p *Product) octobe.Handler {
+func (Handler) ProductByID(id int64, p *Product) octobe.Handler {
 	return func(scheme *octobe.Scheme) error {
 		seg := scheme.Segment(`
 			SELECT
@@ -67,7 +78,7 @@ func ProductByID(id string, p *Product) octobe.Handler {
 }
 
 // Products will take a pointer to append Products into
-func Products(result *[]Product) octobe.Handler {
+func (Handler) Products(result *[]Product) octobe.Handler {
 	return func(scheme *octobe.Scheme) (err error) {
 		seg := scheme.Segment(`
 			SELECT

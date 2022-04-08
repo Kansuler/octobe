@@ -1,0 +1,31 @@
+name: Testing
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+
+      - name: Vendor deps
+        run: go mod vendor
+
+      - name: Run tests
+        run: docker compose up --abort-on-container-exit
+
+      - name: Report coverage to Codacy
+        uses: codacy/codacy-coverage-reporter-action@v1
+        with:
+          api-token: ${{ secrets.CODACY_TOKEN }}
+          coverage-reports: coverage.txt
+          force-coverage-parser: go

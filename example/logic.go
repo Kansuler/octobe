@@ -26,7 +26,8 @@ func RunTx(ob *octobe.Octobe) error {
 		Name: "Foo product",
 	}
 
-	err = scheme.Handle(database.InsertProduct(&product))
+	h := database.Handler{}
+	err = scheme.Handle(h.InsertProduct(&product))
 	if err != nil {
 		return err
 	}
@@ -41,7 +42,8 @@ func Run(ob *octobe.Octobe) error {
 	scheme := ob.Begin(ctx)
 
 	var p database.Product
-	err := scheme.Handle(database.ProductByID("123", &p))
+	h := database.Handler{}
+	err := scheme.Handle(h.ProductByID(1, &p))
 	if err != nil {
 		return err
 	}
@@ -56,7 +58,8 @@ func RunSupress(ob *octobe.Octobe) error {
 	scheme := ob.Begin(ctx)
 
 	var p database.Product
-	err := scheme.Handle(database.ProductByID("123", &p), octobe.SuppressError(sql.ErrNoRows))
+	h := database.Handler{}
+	err := scheme.Handle(h.ProductByID(1, &p), octobe.SuppressError(sql.ErrNoRows))
 	if err != nil {
 		return err
 	}
@@ -69,9 +72,10 @@ func RunSupress(ob *octobe.Octobe) error {
 func RunWatchTransaction(ob *octobe.Octobe) error {
 	ctx := context.Background()
 
+	h := database.Handler{}
 	// WatchTransaction will start a transaction against database, if func returns
 	// error it will perform a rollback of transaction. If err is nil it will do commit
 	return ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
-		return scheme.Handle(database.InsertProduct(&database.Product{Name: "test"}))
+		return scheme.Handle(h.InsertProduct(&database.Product{Name: "test"}))
 	})
 }

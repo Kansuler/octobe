@@ -19,7 +19,7 @@ func TestRun(t *testing.T) {
 
 	defer db.Close()
 
-	mock.ExpectQuery("SELECT id, name FROM products").WithArgs("123").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow("123", "test product"))
+	mock.ExpectQuery("SELECT id, name FROM products").WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow("123", "test product"))
 
 	ob := octobe.New(db)
 	err = example.Run(&ob)
@@ -34,7 +34,7 @@ func TestRunFail(t *testing.T) {
 
 	defer db.Close()
 
-	mock.ExpectQuery("SELECT id, name FROM products").WithArgs("123").WillReturnError(errors.New("an error occurred"))
+	mock.ExpectQuery("SELECT id, name FROM products").WithArgs(1).WillReturnError(errors.New("an error occurred"))
 
 	ob := octobe.New(db)
 	err = example.Run(&ob)
@@ -49,7 +49,7 @@ func TestRunFailSupress(t *testing.T) {
 
 	defer db.Close()
 
-	mock.ExpectQuery("SELECT id, name FROM products").WithArgs("123").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT id, name FROM products").WithArgs(1).WillReturnError(sql.ErrNoRows)
 
 	ob := octobe.New(db)
 	err = example.RunSupress(&ob)
@@ -65,7 +65,7 @@ func TestRunTx(t *testing.T) {
 	defer db.Close()
 
 	mock.ExpectBegin()
-	mock.ExpectQuery("INSERT INTO").WithArgs("Foo product").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("123"))
+	mock.ExpectQuery("INSERT INTO").WithArgs("Foo product").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 
 	ob := octobe.New(db)
@@ -99,7 +99,7 @@ func TestRunWatchTransaction(t *testing.T) {
 	defer db.Close()
 
 	mock.ExpectBegin()
-	mock.ExpectQuery("INSERT INTO").WithArgs("test").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("123"))
+	mock.ExpectQuery("INSERT INTO").WithArgs("test").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 
 	ob := octobe.New(db)
