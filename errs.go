@@ -9,9 +9,12 @@ import (
 type errs []error
 
 func (e errs) Error() string {
-	asStr := make([]string, len(e))
-	for i, x := range e {
-		asStr[i] = fmt.Sprintf("%s.", x.Error())
+	var asStr []string
+	for _, x := range e {
+		if x == nil {
+			continue
+		}
+		asStr = append(asStr, fmt.Sprintf("%s.", x.Error()))
 	}
 	return strings.Join(asStr, " ")
 }
