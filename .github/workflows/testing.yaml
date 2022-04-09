@@ -26,6 +26,6 @@ jobs:
       - name: Report coverage to Codacy
         uses: codacy/codacy-coverage-reporter-action@v1
         with:
-          api-token: ${{ secrets.CODACY_TOKEN }}
+          project-token: ${{ secrets.CODACY_TOKEN }}
           coverage-reports: coverage.txt
           force-coverage-parser: go
