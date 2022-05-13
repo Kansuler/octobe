@@ -10,12 +10,19 @@ type dblike interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
+type transactionlike interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 }
 
 // Octobe struct that holds the database session
 type Octobe struct {
 	// DB is the database instance
-	DB *sql.DB
+	DB dblike
 }
 
 // Option interface that tells what type of option it is
@@ -30,7 +37,7 @@ type option struct {
 }
 
 // New initiates a DB instance and connection.
-func New(db *sql.DB) Octobe {
+func New(db dblike) Octobe {
 	return Octobe{DB: db}
 }
 
@@ -42,7 +49,7 @@ var ErrNeedInput = errors.New("insert method require at least one argument")
 
 // Scheme holds context for the duration of the operation
 type Scheme struct {
-	db dblike
+	db transactionlike
 	// ctx is a context that can be used to interrupt a query
 	ctx context.Context
 }
@@ -85,7 +92,7 @@ type Segment struct {
 	// used specify if this segment already has been executed
 	used bool
 	// tx is the database transaction, initiated by BeginTx
-	db dblike
+	db transactionlike
 	// ctx is a context that can be used to interrupt a query
 	ctx context.Context
 }
