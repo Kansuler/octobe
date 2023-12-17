@@ -50,15 +50,3 @@ type Session[BUILDER any] interface {
 	WatchRollback(func() error)
 	Builder() BUILDER
 }
-
-// Handler is a signature that can be used for handling
-// database segments in a separate function
-type Handler[DRIVER any, BUILDER any] func(BUILDER) (DRIVER, error)
-
-// Handle is a method that handle a query without any options
-func Handle[DRIVER any, BUILDER any](s Session[BUILDER], handler Handler[DRIVER, BUILDER]) (DRIVER, error) {
-	return handler(s.Builder())
-}
-
-// Void is a type that can be used for returning nothing from a handler
-type Void *struct{}

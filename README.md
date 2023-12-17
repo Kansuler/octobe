@@ -55,13 +55,13 @@ func main() {
     name := uuid.New().String()
 
     // Insert a new product into the database, and return a Product struct.
-    product1, err := octobe.Handle(session, AddProduct(name))
+    product1, err := AddProduct(session.Builder(), name)
     if err != nil {
         panic(err)
     }
 
     // Select the product from the database by name, and return a Product struct.
-    product2, err := octobe.Handle(session, ProductByName(product1.Name))
+    product2, err := ProductByName(session.Builder(), product1.Name)
     if err != nil {
         panic(err)
     }
@@ -80,40 +80,27 @@ type Product struct {
 }
 
 // AddProduct is an octobe handler that will insert a product into the database, and return a product model.
-func AddProduct(name string) octobe.Handler[Product, postgres.Builder] {
-    return func(new postgres.Builder) (Product, error) {
-        var product Product
-        query := new(`
-            INSERT INTO
-                products (name)
-            VALUES ($1)
-            RETURNING id, name;
-        `)
+func AddProduct(new postgres.Builder, name string) (Product, error) {
+    var product Product
+    query := new(`
+        INSERT INTO products (name) VALUES ($1) RETURNING id, name;
+    `)
 
-        query.Arguments(name)
-        err := query.QueryRow(&product.ID, &product.Name)
-        return product, err
-    }
+    query.Arguments(name)
+    err := query.QueryRow(&product.ID, &product.Name)
+    return product, err
 }
 
 // ProductByName is an octobe handler that will select a product from the database by name, and return a product model.
-func ProductByName(name string) octobe.Handler[Product, postgres.Builder] {
-    return func(new postgres.Builder) (Product, error) {
-        var product Product
-        query := new(`
-            SELECT
-                id,
-                name
-            FROM
-                products
-            WHERE
-                name = $1;
-        `)
+func ProductByName(new postgres.Builder, name string) (Product, error) {
+    var product Product
+    query := new(`
+        SELECT id, name FROM products WHERE name = $1;
+    `)
 
-        query.Arguments(name)
-        err := query.QueryRow(&product.ID, &product.Name)
-        return product, err
-    }
+    query.Arguments(name)
+    err := query.QueryRow(&product.ID, &product.Name)
+    return product, err
 }
 ```
 
