@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: testdb
+    ports:
+      - "5432:5432"
+  test_postgres:
+    image: golang:1.21
+    environment:
+      DSN: postgresql://user:password@postgres:5432/testdb?sslmode=disable&connect_timeout=10
+    depends_on:
+      - postgres
+    volumes:
+      - type: bind
+        source: ./
+        target: /workspace
+    working_dir: /workspace
+    command: ["go", "test", "-count=1", "-v", "./example/postgres"]

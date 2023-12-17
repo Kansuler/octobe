@@ -2,159 +2,118 @@
 
 ![License](https://img.shields.io/github/license/Kansuler/octobe) ![Tag](https://img.shields.io/github/v/tag/Kansuler/octobe) ![Version](https://img.shields.io/github/go-mod/go-version/Kansuler/octobe) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/492e6729782b471788994a72f2359f39)](https://www.codacy.com/gh/Kansuler/octobe/dashboard?utm_source=github.com&utm_medium=referral&utm_content=Kansuler/octobe&utm_campaign=Badge_Grade) [![Go Reference](https://pkg.go.dev/badge/github.com/Kansuler/octobe.svg)](https://pkg.go.dev/github.com/Kansuler/octobe)
 
-A slim golang package for programmers that love to write raw SQL, but has a problem with boilerplate code. This package will help you structure and unify the way you work with your database.
+A slim golang package for programmers that love to write raw SQL, but has a problem with boilerplate code. This package
+will help you structure and  the way you work with your database.
 
-The main advantage with this library is to enable developers to build a predictable and consistent database layer without losing the feeling of freedom. The octobe library draws inspiration from http handlers, but where handlers interface with the database instead.
+The main advantage with this library is to enable developers to build a predictable and consistent database layer
+without losing the feeling of freedom. The octobe library draws inspiration from http handlers, but where handlers
+interface with the database instead.
 
 Read package documentation at
 [https://pkg.go.dev/github.com/Kansuler/octobe](https://pkg.go.dev/github.com/Kansuler/octobe)
 
 ## Usage
 
-### WatchTransaction
-
-This is a method that can watch the whole transaction, and where you don't have to define rollback or commit.
-
-WatchTransaction will rollback in case error is returned, otherwise it will proceed to commit.
+### Postgres Example
 
 ```go
-func Method(db *sql.DB, ctx context.Context) error {
-  ob := octobe.New(db)
+package main
 
-  // Example of chaining multiple handlers in a transaction
-  return ob.WatchTransaction(ctx, func(scheme *octobe.Scheme) error {
-    p1 := Product{Name: "home made baguette"}
-    err := scheme.Handle(InsertProduct(&p1))
-    if err != nil {
-      return err
+import (
+	"context"
+	"github.com/Kansuler/octobe/v2"
+	"github.com/Kansuler/octobe/v2/driver/postgres"
+	"github.com/google/uuid"
+	"os"
+)
+
+func main() {
+    ctx := context.Background()
+    dsn := os.Getenv("DSN")
+    if dsn == "" {
+        panic("DSN is not set")
     }
 
-    // Execute other non-database logic that can return an error and rollback the transaction
-    err = anotherFunctionWithLogic()
+    // Create a new octobe instance with a postgres driver, insert optional options for configuration that applies to
+    // every session.
+    o, err := octobe.New(postgres.Open(ctx, dsn, postgres.WithTransaction(postgres.TxOptions{})))
     if err != nil {
-      return err
+        panic(err)
     }
 
-    p2 := Product{Name: "another home made baguette"}
-    // For illustration, you can also suppress specific errors in the scheme handler
-    err = scheme.Handle(InsertProduct(&p2), octobe.SuppressError(sql.ErrNoRows), octobe.SuppressError(sql.ErrTxDone))
+    // Begin a new session, since `postgres.WithTransaction` is set, this will start a postgres transaction.
+    session, err := o.Begin(context.Background())
     if err != nil {
-      return err
+        panic(err)
     }
 
-    return nil
-  })
-}
+    // WatchRollback will rollback the transaction if var err is not nil when the function returns.
+    defer session.WatchRollback(func() error {
+        return err
+    })
 
-// InsertProduct will take a pointer of a product, and insert it
-// This method could be in a separate package.
-func InsertProduct(p *Product) octobe.Handler {
-  return func(scheme *octobe.Scheme) error {
-    seg := scheme.Segment(`
-      INSERT INTO
-        products(name)
-      VALUES($1)
-      RETURNING id
-    `)
+    name := uuid.New().String()
 
-    seg.Arguments(p.Name)
-
-    // QueryRow and scan of RETURNING from query.
-    return seg.QueryRow(&p.ID)
-  }
-}
-```
-
-### Transaction
-
-Run a query with transaction, and chain handlers.
-
-```go
-func Method(db *sql.DB, ctx context.Context) error {
-  ob := octobe.New(db)
-  scheme, err := ob.BeginTx(ctx)
-  if err != nil {
-    return err
-  }
-
-  // WatchRollback returns error that is defined in the scope of this Method.
-  // if err is not nil, octobe will perform a rollback.
-  defer scheme.WatchRollback(func() error {
-    return err
-  })
-
-  p := Product{Name: "home made baguette"}
-  err = scheme.Handle(InsertProduct(&p))
-  if err != nil {
-    return err
-  }
-
-  // Finish with a commit
-  return scheme.Commit()
-}
-
-// InsertProduct will take a pointer of a product, and insert it
-// This method could be in a separate package.
-func InsertProduct(p *Product) octobe.Handler {
-  return func(scheme *octobe.Scheme) error {
-    seg := scheme.Segment(`
-      INSERT INTO
-        products(name)
-      VALUES($1)
-      RETURNING id
-    `)
-
-    seg.Arguments(p.Name)
-
-    // QueryRow and scan of RETURNING from query.
-    return seg.QueryRow(&p.ID)
-  }
-}
-```
-
-### Basic Handler
-
-Run a simple query where you chain database handlers.
-
-```go
-func Method(db *sql.DB, ctx context.Context) error {
-  // New creates an octobe context around an *sql.DB instance
-  // SuppressError is option and can be used to ignore specific errors, like sql.ErrNoRows"
-  ob := octobe.New(db, octobe.SuppressError(sql.ErrNoRows))
-
-  // Begin is used to start without a database transaction
-  scheme := ob.Begin(ctx)
-
-  var p1 Product
-  // Handle a database query in another method, perfect for separating out queries to a database package
-  err := scheme.Handle(SelectNameHandler(1, &p1))
-  if err != nil {
-    return err
-  }
-
-  var p2 Product
-  err := scheme.Handle(SelectNameHandler(2, &p2))
+    // Insert a new product into the database, and return a Product struct.
+    product1, err := octobe.Handle(session, AddProduct(name))
     if err != nil {
-    return err
-  }
+        panic(err)
+    }
 
-  return
+    // Select the product from the database by name, and return a Product struct.
+    product2, err := octobe.Handle(session, ProductByName(product1.Name))
+    if err != nil {
+        panic(err)
+    }
+
+    // Commit the transaction, if err is not nil, the transaction will be rolled back via WatchRollback.
+    err = session.Commit()
+    if err != nil {
+        panic(err)
+    }
 }
 
-// Handler func that implements the octobe.Handler
-func SelectNameHandler(id string, p *Product) octobe.Handler {
-  return func(scheme *octobe.Scheme) error {
-    // A segment is a specific query, you can chain many queries in here, or split chained logic into multiple handler funcs if you'd like.
-    seg := scheme.Segment(`
-      SELECT name FROM products WHERE id = $1;
-    `)
+// Product is a model that represents a product in the database
+type Product struct {
+    ID   int
+    Name string
+}
 
-    // Arguments takes any input to the query
-    seg.Arguments(id)
+// AddProduct is an octobe handler that will insert a product into the database, and return a product model.
+func AddProduct(name string) octobe.Handler[Product, postgres.Builder] {
+    return func(new postgres.Builder) (Product, error) {
+        var product Product
+        query := new(`
+            INSERT INTO
+                products (name)
+            VALUES ($1)
+            RETURNING id, name;
+        `)
 
-    // Segment has all the normal methods you expect such as QueryRow, Query and Exec.
-    return seg.QueryRow(&p.Name)
-  }
+        query.Arguments(name)
+        err := query.QueryRow(&product.ID, &product.Name)
+        return product, err
+    }
+}
+
+// ProductByName is an octobe handler that will select a product from the database by name, and return a product model.
+func ProductByName(name string) octobe.Handler[Product, postgres.Builder] {
+    return func(new postgres.Builder) (Product, error) {
+        var product Product
+        query := new(`
+            SELECT
+                id,
+                name
+            FROM
+                products
+            WHERE
+                name = $1;
+        `)
+
+        query.Arguments(name)
+        err := query.QueryRow(&product.ID, &product.Name)
+        return product, err
+    }
 }
 ```
 
