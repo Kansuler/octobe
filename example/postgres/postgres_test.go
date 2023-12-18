@@ -31,13 +31,13 @@ func TestPostgres(t *testing.T) {
 		return err
 	})
 
-	_, err = Migration(session.Builder())
+	_, err = octobe.Execute(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	name := uuid.New().String()
-	product1, err := AddProduct(session.Builder(), name)
+	product1, err := octobe.Execute(session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -45,7 +45,7 @@ func TestPostgres(t *testing.T) {
 	assert.Equal(t, name, product1.Name)
 	assert.NotZero(t, product1.ID)
 
-	product2, err := ProductByName(session.Builder(), name)
+	product2, err := octobe.Execute(session, ProductByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -59,16 +59,17 @@ func TestPostgres(t *testing.T) {
 	}
 }
 
-func Migration(new postgres.Builder) (bool, error) {
-	query := new(`
-		CREATE TABLE IF NOT EXISTS products (
-			id SERIAL PRIMARY KEY,
-		    name TEXT NOT NULL
-		);
-	`)
-
-	result, err := query.Exec()
-	return result.Insert(), err
+func Migration() octobe.Handler[postgres.Builder, octobe.Void] {
+	return func(builder postgres.Builder) (octobe.Void, error) {
+		query := builder(`
+			CREATE TABLE IF NOT EXISTS products (
+				id SERIAL PRIMARY KEY,
+				name TEXT NOT NULL
+			);
+		`)
+		_, err := query.Exec()
+		return nil, err
+	}
 }
 
 type Product struct {
@@ -76,24 +77,28 @@ type Product struct {
 	Name string
 }
 
-func AddProduct(new postgres.Builder, name string) (Product, error) {
-	var product Product
-	query := new(`
-		INSERT INTO products (name) VALUES ($1) RETURNING id, name;
-	`)
+func AddProduct(name string) octobe.Handler[postgres.Builder, Product] {
+	return func(builder postgres.Builder) (Product, error) {
+		var product Product
+		query := builder(`
+			INSERT INTO products (name) VALUES ($1) RETURNING id, name;
+		`)
 
-	query.Arguments(name)
-	err := query.QueryRow(&product.ID, &product.Name)
-	return product, err
+		query.Arguments(name)
+		err := query.QueryRow(&product.ID, &product.Name)
+		return product, err
+	}
 }
 
-func ProductByName(new postgres.Builder, name string) (Product, error) {
-	var product Product
-	query := new(`
-		SELECT id, name FROM products WHERE name = $1;
-	`)
+func ProductByName(name string) octobe.Handler[postgres.Builder, Product] {
+	return func(builder postgres.Builder) (Product, error) {
+		var product Product
+		query := builder(`
+			SELECT id, name FROM products WHERE name = $1;
+		`)
 
-	query.Arguments(name)
-	err := query.QueryRow(&product.ID, &product.Name)
-	return product, err
+		query.Arguments(name)
+		err := query.QueryRow(&product.ID, &product.Name)
+		return product, err
+	}
 }

@@ -160,22 +160,19 @@ func (s *session) WatchRollback(cb func() error) {
 	}
 }
 
-// Builder will return a new builder for building queries
-func (s *session) Builder() Builder {
-	return s.New
-}
-
-// Builder is a function that is used for building queries
+// Builder is a function signature that is used for building queries with postgres
 type Builder func(query string) Segment
 
-// New will return a new segment for building queries
-func (s *session) New(query string) Segment {
-	return Segment{
-		query: query,
-		args:  nil,
-		used:  false,
-		tx:    s.tx,
-		ctx:   s.ctx,
+// Builder will return a new builder for building queries
+func (s *session) Builder() Builder {
+	return func(query string) Segment {
+		return Segment{
+			query: query,
+			args:  nil,
+			used:  false,
+			tx:    s.tx,
+			ctx:   s.ctx,
+		}
 	}
 }
 
@@ -184,7 +181,7 @@ type Segment struct {
 	// query in SQL that is going to be executed
 	query string
 	// args include argument values
-	args []interface{}
+	args []any
 	// used specify if this Segment already has been executed
 	used bool
 	// tx is the database transaction, initiated by BeginTx

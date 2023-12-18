@@ -55,13 +55,13 @@ func main() {
     name := uuid.New().String()
 
     // Insert a new product into the database, and return a Product struct.
-    product1, err := AddProduct(session.Builder(), name)
+    product1, err := octobe.Execute(session, AddProduct(name))
     if err != nil {
         panic(err)
     }
 
     // Select the product from the database by name, and return a Product struct.
-    product2, err := ProductByName(session.Builder(), product1.Name)
+    product2, err := octobe.Execute(session, ProductByName(name))
     if err != nil {
         panic(err)
     }
@@ -80,27 +80,34 @@ type Product struct {
 }
 
 // AddProduct is an octobe handler that will insert a product into the database, and return a product model.
-func AddProduct(new postgres.Builder, name string) (Product, error) {
-    var product Product
-    query := new(`
-        INSERT INTO products (name) VALUES ($1) RETURNING id, name;
-    `)
+// In the octobe.Handler signature the first generic is the type of driver builder, and the second is the returned type.
+func AddProduct(name string) octobe.Handler[postgres.Builder, Product] {
+    return func(builder postgres.Builder) (Product, error) {
+        var product Product
+        query := builder(`
+            INSERT INTO products (name) VALUES ($1) RETURNING id, name;
+        `)
 
-    query.Arguments(name)
-    err := query.QueryRow(&product.ID, &product.Name)
-    return product, err
+        query.Arguments(name)
+        err := query.QueryRow(&product.ID, &product.Name)
+        return product, err
+    }
 }
 
-// ProductByName is an octobe handler that will select a product from the database by name, and return a product model.
-func ProductByName(new postgres.Builder, name string) (Product, error) {
-    var product Product
-    query := new(`
-        SELECT id, name FROM products WHERE name = $1;
-    `)
 
-    query.Arguments(name)
-    err := query.QueryRow(&product.ID, &product.Name)
-    return product, err
+// ProductByName is an octobe handler that will select a product from the database by name, and return a product model.
+// In the octobe.Handler signature the first generic is the type of driver builder, and the second is the returned type.
+func ProductByName(name string) octobe.Handler[postgres.Builder, Product] {
+	return func(builder postgres.Builder) (Product, error) {
+		var product Product
+		query := builder(`
+			SELECT id, name FROM products WHERE name = $1;
+		`)
+
+		query.Arguments(name)
+		err := query.QueryRow(&product.ID, &product.Name)
+		return product, err
+	}
 }
 ```
 

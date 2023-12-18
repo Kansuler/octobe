@@ -50,3 +50,16 @@ type Session[BUILDER any] interface {
 	WatchRollback(func() error)
 	Builder() BUILDER
 }
+
+// Handler is a signature type for a handler. The handler receives a builder of the specific driver and returns a result
+// and an error.
+type Handler[BUILDER any, RESULT any] func(BUILDER) (RESULT, error)
+
+// Execute is a function that can be used for executing a handler with a session builder. This function injects the
+// builder of the driver into the handler.
+func Execute[BUILDER any, RESULT any](session Session[BUILDER], f Handler[BUILDER, RESULT]) (RESULT, error) {
+	return f(session.Builder())
+}
+
+// Void is a type that can be used for returning nothing from a handler.
+type Void *struct{}
