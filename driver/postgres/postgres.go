@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+type Driver octobe.Driver[postgres, config, Builder]
+
 // postgres holds the connection pool and default configuration for the postgres driver
 type postgres struct {
 	pool *pgx.Conn

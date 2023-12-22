@@ -9,7 +9,7 @@ services:
       POSTGRES_DB: testdb
     ports:
       - "5432:5432"
-  test_postgres:
+  test:
     image: golang:1.21
     environment:
       DSN: postgresql://user:password@postgres:5432/testdb?sslmode=disable&connect_timeout=10
@@ -20,4 +20,4 @@ services:
         source: ./
         target: /workspace
     working_dir: /workspace
-    command: ["go", "test", "-count=1", "-v", "./example/postgres"]
+    command: ["go", "test", "-count=1", "-v", "./driver/..."]
