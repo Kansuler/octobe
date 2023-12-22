@@ -20,4 +20,8 @@ services:
         source: ./
         target: /workspace
     working_dir: /workspace
-    command: ["go", "test", "-count=1", "-v", "./driver/..."]
+    command: >
+        bash -c "
+            go install gotest.tools/gotestsum@latest &&
+            gotestsum -- -coverprofile=coverage.txt -timeout=10s -v -count=1 -coverpkg=./... -covermode=atomic ./driver/...
+        "
