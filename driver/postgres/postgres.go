@@ -176,6 +176,16 @@ func (s *session) Builder() Builder {
 	}
 }
 
+// Handler is a signature type for a handler. The handler receives a builder of the specific driver and returns a result
+// and an error.
+type Handler[RESULT any] func(Builder) (RESULT, error)
+
+// Execute is a function that can be used for executing a handler with a session builder. This function injects the
+// builder of the driver into the handler.
+func Execute[RESULT any](session octobe.Session[Builder], f Handler[RESULT]) (RESULT, error) {
+	return f(session.Builder())
+}
+
 // Segment is a specific query that can be run only once it keeps a few fields for keeping track on the Segment
 type Segment struct {
 	// query in SQL that is going to be executed

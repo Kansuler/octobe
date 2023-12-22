@@ -55,13 +55,13 @@ func main() {
     name := uuid.New().String()
 
     // Insert a new product into the database, and return a Product struct.
-    product1, err := octobe.Execute(session, AddProduct(name))
+    product1, err := postgres.Execute(session, AddProduct(name))
     if err != nil {
         panic(err)
     }
 
     // Select the product from the database by name, and return a Product struct.
-    product2, err := octobe.Execute(session, ProductByName(name))
+    product2, err := postgres.Execute(session, ProductByName(name))
     if err != nil {
         panic(err)
     }
@@ -81,7 +81,7 @@ type Product struct {
 
 // AddProduct is an octobe handler that will insert a product into the database, and return a product model.
 // In the octobe.Handler signature the first generic is the type of driver builder, and the second is the returned type.
-func AddProduct(name string) octobe.Handler[postgres.Builder, Product] {
+func AddProduct(name string) postgres.Handler[Product] {
     return func(builder postgres.Builder) (Product, error) {
         var product Product
         query := builder(`
@@ -97,7 +97,7 @@ func AddProduct(name string) octobe.Handler[postgres.Builder, Product] {
 
 // ProductByName is an octobe handler that will select a product from the database by name, and return a product model.
 // In the octobe.Handler signature the first generic is the type of driver builder, and the second is the returned type.
-func ProductByName(name string) octobe.Handler[postgres.Builder, Product] {
+func ProductByName(name string) postgres.Handler[Product] {
 	return func(builder postgres.Builder) (Product, error) {
 		var product Product
 		query := builder(`

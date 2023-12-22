@@ -31,13 +31,13 @@ func TestPostgres(t *testing.T) {
 		return err
 	})
 
-	_, err = octobe.Execute(session, Migration())
+	_, err = postgres.Execute(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	name := uuid.New().String()
-	product1, err := octobe.Execute(session, AddProduct(name))
+	product1, err := postgres.Execute(session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -45,7 +45,7 @@ func TestPostgres(t *testing.T) {
 	assert.Equal(t, name, product1.Name)
 	assert.NotZero(t, product1.ID)
 
-	product2, err := octobe.Execute(session, ProductByName(name))
+	product2, err := postgres.Execute(session, ProductByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -59,7 +59,7 @@ func TestPostgres(t *testing.T) {
 	}
 }
 
-func Migration() octobe.Handler[postgres.Builder, octobe.Void] {
+func Migration() postgres.Handler[octobe.Void] {
 	return func(builder postgres.Builder) (octobe.Void, error) {
 		query := builder(`
 			CREATE TABLE IF NOT EXISTS products (
@@ -77,7 +77,7 @@ type Product struct {
 	Name string
 }
 
-func AddProduct(name string) octobe.Handler[postgres.Builder, Product] {
+func AddProduct(name string) postgres.Handler[Product] {
 	return func(builder postgres.Builder) (Product, error) {
 		var product Product
 		query := builder(`
@@ -90,7 +90,7 @@ func AddProduct(name string) octobe.Handler[postgres.Builder, Product] {
 	}
 }
 
-func ProductByName(name string) octobe.Handler[postgres.Builder, Product] {
+func ProductByName(name string) postgres.Handler[Product] {
 	return func(builder postgres.Builder) (Product, error) {
 		var product Product
 		query := builder(`
