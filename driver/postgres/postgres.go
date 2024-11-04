@@ -117,6 +117,11 @@ func (d *postgres) Begin(ctx context.Context, opts ...octobe.Option[config]) (oc
 	}, nil
 }
 
+// Close will close the database connection.
+func (d *postgres) Close(ctx context.Context) error {
+	return d.pool.Close(ctx)
+}
+
 // session is a struct that holds session context, a session should be considered a series of queries that are related
 // to each other. A session can be transactional or non-transactional, if it is transactional, it will enforce the usage
 // of commit and rollback. If it is non-transactional, it will not enforce the usage of commit and rollback.

@@ -13,6 +13,7 @@ type Option[CONFIG any] func(cfg *CONFIG)
 // Driver is a signature that holds the specific driver in the Octobe context.
 type Driver[DRIVER any, CONFIG any, BUILDER any] interface {
 	Begin(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error)
+	Close(ctx context.Context) error
 }
 
 // Open is a signature that can be used for opening a driver, it should always return a driver with set signature of
@@ -41,6 +42,11 @@ func New[DRIVER any, CONFIG any, BUILDER any](init Open[DRIVER, CONFIG, BUILDER]
 // the Octobe instance.
 func (ob *Octobe[DRIVER, CONFIG, BUILDER]) Begin(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error) {
 	return ob.driver.Begin(ctx, opts...)
+}
+
+// Close the database connection.
+func (ob *Octobe[DRIVER, CONFIG, BUILDER]) Close(ctx context.Context) error {
+	return ob.driver.Close(ctx)
 }
 
 // Session is a signature that has a

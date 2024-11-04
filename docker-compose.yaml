@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: testdb
-    ports:
-      - "5432:5432"
   test:
     image: golang:1.21
     environment:

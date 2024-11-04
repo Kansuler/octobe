@@ -57,6 +57,9 @@ func TestPostgres(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
+
+	err = ob.Close(ctx)
+	assert.NoError(t, err)
 }
 
 func Migration() postgres.Handler[octobe.Void] {
