@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: testdb
   test:
-    image: golang:1.21
+    image: golang:1.25
     environment:
       DSN: postgresql://user:password@postgres:5432/testdb?sslmode=disable&connect_timeout=10
     depends_on:
@@ -19,7 +19,7 @@ services:
         target: /workspace
     working_dir: /workspace
     command: >
-        bash -c "
-            go install gotest.tools/gotestsum@latest &&
-            gotestsum -- -coverprofile=coverage.txt -timeout=10s -v -count=1 -coverpkg=./... -covermode=atomic ./driver/...
-        "
+      bash -c "
+          go install gotest.tools/gotestsum@latest &&
+          gotestsum -- -coverprofile=coverage.txt -timeout=10s -v -count=1 -coverpkg=./... -covermode=atomic ./driver/...
+      "
