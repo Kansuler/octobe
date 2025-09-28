@@ -343,35 +343,7 @@ Octobe uses the underlying driver's connection pooling (like pgxpool). Configure
 config, _ := pgxpool.ParseConfig(dsn)
 config.MaxConns = 50
 pool, _ := pgxpool.NewWithConfig(ctx, config)
-db, _ := octobe.New(postgres.OpenPGXPoolWithPool(pool))
-```
-
-### Can I use Octobe with existing database code?
-
-Yes! Octobe doesn't require you to rewrite everything. You can:
-
-1. Use Octobe for new features
-2. Gradually migrate existing code
-3. Use both approaches in the same application
-4. Extract the underlying connection for direct use when needed
-
-### What about logging and observability?
-
-Add logging middleware to your handlers:
-
-```go
-func WithLogging[T any](name string, handler postgres.Handler[T]) postgres.Handler[T] {
-    return func(builder postgres.Builder) (T, error) {
-        start := time.Now()
-        result, err := handler(builder)
-
-        log.Printf("Handler %s took %v, error: %v", name, time.Since(start), err)
-        return result, err
-    }
-}
-
-// Usage
-user, err := postgres.Execute(session, WithLogging("GetUser", GetUser(123)))
+db, _ := octobe.New(postgres.OpenPGXWithPool(pool))
 ```
 
 ## Installation & Drivers
@@ -388,8 +360,7 @@ go get github.com/Kansuler/octobe/v3/driver/postgres
 
 - **PostgreSQL**: Full-featured driver using pgx/v5
 - **SQLite**: _Coming soon_
-- **MySQL**: _Coming soon_
-- **SQL Server**: _Coming soon_
+- **Clickhouse**: _Coming soon_
 
 Want to add a driver? Check our [Driver Development Guide](CONTRIBUTING.md#driver-development).
 
@@ -412,14 +383,6 @@ We welcome contributions! Here's how to get started:
 4. Commit your changes (`git commit -m 'Add amazing feature'`)
 5. Push to the branch (`git push origin feature/amazing-feature`)
 6. Open a Pull Request
-
-### Development Areas
-
-- **New Database Drivers**: SQLite, MySQL, SQL Server
-- **Testing Utilities**: More helper functions and assertions
-- **Documentation**: Examples, guides, and API documentation
-- **Performance**: Benchmarks and optimizations
-- **Tooling**: Code generation, CLI tools, IDE plugins
 
 ### Driver Development
 
