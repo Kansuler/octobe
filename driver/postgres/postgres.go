@@ -1,257 +1,81 @@
 package postgres
 
 import (
-	"context"
-	"errors"
-	"github.com/Kansuler/octobe/v2"
+	"github.com/Kansuler/octobe/v3"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type Driver octobe.Driver[postgres, config, Builder]
+type (
+	PGXDriver     octobe.Driver[pgxConn, pgxConfig, Builder]
+	PGXPoolDriver octobe.Driver[pgxpoolConn, pgxConfig, Builder]
+)
 
-// postgres holds the connection pool and default configuration for the postgres driver
-type postgres struct {
-	pool *pgx.Conn
-	cfg  config
+// Builder constructs executable query segments from SQL strings.
+type Builder func(query string) Segment
+
+// PGXTxOptions configures transaction behavior and isolation levels.
+type PGXTxOptions pgx.TxOptions
+
+type pgxConfig struct {
+	txOptions *PGXTxOptions
 }
 
-// config defined various configurations possible for the postgres driver
-type config struct {
-	txOptions *TxOptions
-}
-
-// TxOptions is a struct that holds the options for a transaction
-type TxOptions pgx.TxOptions
-
-// WithTransaction enables the use of a transaction for the session, enforce the usage of commit and rollback.
-func WithTransaction(options TxOptions) octobe.Option[config] {
-	return func(c *config) {
+// WithPGXTxOptions configures transaction options for the session.
+func WithPGXTxOptions(options PGXTxOptions) octobe.Option[pgxConfig] {
+	return func(c *pgxConfig) {
 		c.txOptions = &options
 	}
 }
 
-// WithoutTransaction disables the use of a transaction for the session, this will not enforce the usage of commit and
-// rollback.
-func WithoutTransaction() octobe.Option[config] {
-	return func(c *config) {
-		c.txOptions = nil
-	}
+// Segment represents a prepared query with arguments that can be executed once.
+// Once executed, the segment becomes invalid and cannot be reused.
+//
+// The single-use nature prevents accidental query reuse and ensures predictable behavior.
+// To execute the same query multiple times, create new segments each time.
+//
+// Method chaining example:
+//
+//	result, err := builder(`INSERT INTO users (name) VALUES ($1) RETURNING id`)
+//	    .Arguments("Alice")
+//	    .QueryRow(&userID)
+//
+// Multiple operations example:
+//
+//	// First query
+//	err := builder(`UPDATE users SET name = $1 WHERE id = $2`)
+//	    .Arguments("Alice", 123)
+//	    .QueryRow()
+//
+//	// Second query (new segment required)
+//	err = builder(`DELETE FROM sessions WHERE user_id = $1`)
+//	    .Arguments(123)
+//	    .Exec()
+type Segment interface {
+	Arguments(args ...any) Segment
+	Exec() (ExecResult, error)
+	QueryRow(dest ...any) error
+	Query(cb func(Rows) error) error
 }
 
-// Type check to make sure that the postgres driver implements the Octobe Driver interface
-var _ octobe.Driver[postgres, config, Builder] = &postgres{}
-
-// Open is a function that can be used for opening a new database connection, it should always return a driver with set
-// signature of types for the local driver.
-func Open(ctx context.Context, dsn string, opts ...octobe.Option[config]) octobe.Open[postgres, config, Builder] {
-	return func() (octobe.Driver[postgres, config, Builder], error) {
-		pool, err := pgx.Connect(ctx, dsn)
-		if err != nil {
-			return nil, err
-		}
-
-		var cfg config
-		for _, opt := range opts {
-			opt(&cfg)
-		}
-
-		return &postgres{
-			pool: pool,
-			cfg:  cfg,
-		}, nil
-	}
+// ExecResult contains the outcome of an INSERT, UPDATE, or DELETE operation.
+type ExecResult struct {
+	RowsAffected int64
 }
 
-// OpenWithPool is a function that can be used for opening a new database connection, it should always return a driver
-// with set signature of types for the local driver. This function is used when a connection pool is already available.
-func OpenWithPool(pool *pgx.Conn, opts ...octobe.Option[config]) octobe.Open[postgres, config, Builder] {
-	return func() (octobe.Driver[postgres, config, Builder], error) {
-		if pool == nil {
-			return nil, errors.New("pool is nil")
-		}
+// Rows provides iteration over query result sets with pgx/database compatibility.
+// Callers must check Err() after Next() returns false to detect premature termination.
+type Rows interface {
+	// Err returns any error encountered during iteration.
+	// Only call after rows are closed or Next() returns false.
+	Err() error
 
-		var cfg config
-		for _, opt := range opts {
-			opt(&cfg)
-		}
+	// Next advances to the next row, returning false when no more rows exist.
+	// Automatically closes rows when iteration completes.
+	Next() bool
 
-		return &postgres{
-			pool: pool,
-			cfg:  cfg,
-		}, nil
-	}
+	// Scan copies column values from the current row into dest variables.
+	// Must call Next() and verify it returned true before calling Scan.
+	Scan(dest ...any) error
 }
 
-// Begin will start a new session with the database, this will return a Session instance that can be used for handling
-// queries. Options can be passed to the driver for specific configuration that overwrites the default configuration
-// given at instantiation of the Octobe instance. If no options are passed, the default configuration will be used.
-// If the default configuration is not set, the session will not be transactional.
-func (d *postgres) Begin(ctx context.Context, opts ...octobe.Option[config]) (octobe.Session[Builder], error) {
-	cfg := d.cfg
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-
-	var tx pgx.Tx
-	var err error
-	if cfg.txOptions == nil {
-		tx, err = d.pool.Begin(ctx)
-	} else {
-		tx, err = d.pool.BeginTx(ctx, pgx.TxOptions{
-			IsoLevel:       cfg.txOptions.IsoLevel,
-			AccessMode:     cfg.txOptions.AccessMode,
-			DeferrableMode: cfg.txOptions.DeferrableMode,
-			BeginQuery:     cfg.txOptions.BeginQuery,
-		})
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &session{
-		ctx: ctx,
-		cfg: cfg,
-		tx:  tx,
-	}, nil
-}
-
-// Close will close the database connection.
-func (d *postgres) Close(ctx context.Context) error {
-	return d.pool.Close(ctx)
-}
-
-// session is a struct that holds session context, a session should be considered a series of queries that are related
-// to each other. A session can be transactional or non-transactional, if it is transactional, it will enforce the usage
-// of commit and rollback. If it is non-transactional, it will not enforce the usage of commit and rollback.
-// A session is not thread safe, it should only be used in one thread at a time.
-type session struct {
-	ctx       context.Context
-	cfg       config
-	tx        pgx.Tx
-	committed bool
-}
-
-// Type check to make sure that the session implements the Octobe Session interface
-var _ octobe.Session[Builder] = &session{}
-
-// Commit will commit a transaction, this will only work if the session is transactional.
-func (s *session) Commit() error {
-	if s.cfg.txOptions == nil {
-		return errors.New("cannot commit without transaction")
-	}
-	defer func() {
-		s.committed = true
-	}()
-	return s.tx.Commit(s.ctx)
-}
-
-// Rollback will rollback a transaction, this will only work if the session is transactional.
-func (s *session) Rollback() error {
-	if s.cfg.txOptions == nil {
-		return errors.New("cannot rollback without transaction")
-	}
-	return s.tx.Rollback(s.ctx)
-}
-
-// WatchRollback will watch for a rollback, if the session is not committed, it will rollback the transaction.
-func (s *session) WatchRollback(cb func() error) {
-	if !s.committed {
-		_ = s.Rollback()
-		return
-	}
-
-	if err := cb(); err != nil {
-		_ = s.Rollback()
-	}
-}
-
-// Builder is a function signature that is used for building queries with postgres
-type Builder func(query string) Segment
-
-// Builder will return a new builder for building queries
-func (s *session) Builder() Builder {
-	return func(query string) Segment {
-		return Segment{
-			query: query,
-			args:  nil,
-			used:  false,
-			tx:    s.tx,
-			ctx:   s.ctx,
-		}
-	}
-}
-
-// Handler is a signature type for a handler. The handler receives a builder of the specific driver and returns a result
-// and an error.
-type Handler[RESULT any] func(Builder) (RESULT, error)
-
-// Execute is a function that can be used for executing a handler with a session builder. This function injects the
-// builder of the driver into the handler.
-func Execute[RESULT any](session octobe.Session[Builder], f Handler[RESULT]) (RESULT, error) {
-	return f(session.Builder())
-}
-
-// Segment is a specific query that can be run only once it keeps a few fields for keeping track on the Segment
-type Segment struct {
-	// query in SQL that is going to be executed
-	query string
-	// args include argument values
-	args []any
-	// used specify if this Segment already has been executed
-	used bool
-	// tx is the database transaction, initiated by BeginTx
-	tx pgx.Tx
-	// ctx is a context that can be used to interrupt a query
-	ctx context.Context
-}
-
-// use will set used to true after a Segment has been performed
-func (s *Segment) use() {
-	s.used = true
-}
-
-// Arguments receives unknown amount of arguments to use in the query
-func (s *Segment) Arguments(args ...interface{}) *Segment {
-	s.args = args
-	return s
-}
-
-// Exec will execute a query. Used for inserts or updates
-func (s *Segment) Exec() (pgconn.CommandTag, error) {
-	if s.used {
-		return pgconn.CommandTag{}, octobe.ErrAlreadyUsed
-	}
-	defer s.use()
-	return s.tx.Exec(s.ctx, s.query, s.args...)
-}
-
-// QueryRow will return one result and put them into destination pointers
-func (s *Segment) QueryRow(dest ...interface{}) error {
-	if s.used {
-		return octobe.ErrAlreadyUsed
-	}
-	defer s.use()
-	return s.tx.QueryRow(s.ctx, s.query, s.args...).Scan(dest...)
-}
-
-// Query will perform a normal query against database that returns rows
-func (s *Segment) Query(cb func(pgx.Rows) error) error {
-	if s.used {
-		return octobe.ErrAlreadyUsed
-	}
-	defer s.use()
-
-	rows, err := s.tx.Query(s.ctx, s.query, s.args...)
-	if err != nil {
-		return err
-	}
-
-	defer rows.Close()
-	if err = cb(rows); err != nil {
-		return err
-	}
-
-	return nil
-}
+var _ Rows = (pgx.Rows)(nil)
