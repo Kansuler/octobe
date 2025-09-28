@@ -14,7 +14,7 @@
 //	}
 //
 //	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-//	    user, err := postgres.Execute(session, CreateUser("Alice"))
+//	    user, err := octobe.Execute(session, CreateUser("Alice"))
 //	    return err // Automatic rollback on error, commit on success
 //	})
 package octobe
@@ -127,7 +127,7 @@ type BuilderSession[BUILDER any] interface {
 //
 // Example:
 //
-//	func DeleteUser(id int) postgres.Handler[octobe.Void] {
+//	func DeleteUser(id int) octobe.Handler[octobe.Void] {
 //	    return func(builder postgres.Builder) (octobe.Void, error) {
 //	        query := builder(`DELETE FROM users WHERE id = $1`)
 //	        _, err := query.Arguments(id).Exec()
@@ -151,12 +151,12 @@ type Void *struct{}
 // Example:
 //
 //	err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-//	    user, err := postgres.Execute(session, CreateUser("Alice"))
+//	    user, err := octobe.Execute(session, CreateUser("Alice"))
 //	    if err != nil {
 //	        return err // Automatic rollback
 //	    }
 //
-//	    _, err = postgres.Execute(session, CreateProfile(user.ID))
+//	    _, err = octobe.Execute(session, CreateProfile(user.ID))
 //	    return err // Automatic commit if nil, rollback if error
 //	})
 func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver Driver[DRIVER, CONFIG, BUILDER], fn func(session BuilderSession[BUILDER]) error, opts ...Option[CONFIG]) (err error) {
@@ -214,7 +214,7 @@ func Execute[RESULT, BUILDER any](session BuilderSession[BUILDER], f Handler[RES
 //
 // Example:
 //
-//	err := postgres.ExecuteVoid(session, DeleteUser(123))
+//	err := octobe.ExecuteVoid(session, DeleteUser(123))
 //	if err != nil {
 //	    return fmt.Errorf("failed to delete user: %w", err)
 //	}
@@ -229,7 +229,7 @@ func ExecuteVoid[BUILDER any](session BuilderSession[BUILDER], f Handler[Void, B
 //
 // Example:
 //
-//	results, err := postgres.ExecuteMany(session,
+//	results, err := octobe.ExecuteMany(session,
 //	    CreateUser("Alice"),
 //	    CreateUser("Bob"),
 //	    CreateUser("Charlie"),
