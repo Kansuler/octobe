@@ -111,6 +111,10 @@ func (d *pgxConn) Begin(ctx context.Context, opts ...octobe.Option[pgxConfig]) (
 	}, nil
 }
 
+func (d *pgxConn) BeginTx(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
+	return d.Begin(ctx, transactionOptions(opts)...)
+}
+
 func (d *pgxConn) Close(ctx context.Context) error {
 	if d.conn == nil {
 		return errors.New("connection is nil")

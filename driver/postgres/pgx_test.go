@@ -50,7 +50,7 @@ func TestPGXWithTxInsideStartTransaction(t *testing.T) {
 			assert.NotZero(t, products[0].ID)
 		}
 		return nil
-	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	})
 
 	err = ob.Close(ctx)
 	assert.NoError(t, err)

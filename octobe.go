@@ -47,9 +47,11 @@ type Option[CONFIG any] func(cfg *CONFIG)
 // Implementations handle connection pooling, transaction lifecycle, and driver-specific
 // optimizations while providing a consistent interface across database types.
 type Driver[DRIVER any, CONFIG any, BUILDER any] interface {
-	// Begin starts a new database session. If transaction options are provided,
-	// the session will be transactional and require Commit/Rollback.
+	// Begin starts a new database session. Driver-specific options can make it transactional.
 	Begin(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error)
+
+	// BeginTx starts a transactional database session even when no transaction options are provided.
+	BeginTx(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error)
 
 	// Close releases all database connections and resources.
 	Close(ctx context.Context) error
@@ -160,7 +162,7 @@ type Void *struct{}
 //	    return err // Automatic commit if nil, rollback if error
 //	})
 func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver Driver[DRIVER, CONFIG, BUILDER], fn func(session BuilderSession[BUILDER]) error, opts ...Option[CONFIG]) (err error) {
-	session, err := driver.Begin(ctx, opts...)
+	session, err := driver.BeginTx(ctx, opts...)
 	if err != nil {
 		return err
 	}
@@ -179,8 +181,7 @@ func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver D
 		return err
 	}
 
-	err = session.Commit()
-	return err
+	return session.Commit()
 }
 
 // Handler processes database operations and returns typed results.

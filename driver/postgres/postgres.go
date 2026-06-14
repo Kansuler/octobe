@@ -27,6 +27,18 @@ func WithPGXTxOptions(options PGXTxOptions) octobe.Option[pgxConfig] {
 	}
 }
 
+// transactionOptions applies transaction options to the given options slice, ensuring a non-nil txOptions field.
+func transactionOptions(opts []octobe.Option[pgxConfig]) []octobe.Option[pgxConfig] {
+	txOpts := make([]octobe.Option[pgxConfig], 0, len(opts)+1)
+	txOpts = append(txOpts, opts...)
+	txOpts = append(txOpts, func(c *pgxConfig) {
+		if c.txOptions == nil {
+			c.txOptions = &PGXTxOptions{}
+		}
+	})
+	return txOpts
+}
+
 // Segment represents a prepared query with arguments that can be executed once.
 // Once executed, the segment becomes invalid and cannot be reused.
 //

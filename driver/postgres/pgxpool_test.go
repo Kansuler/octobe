@@ -66,7 +66,7 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 		}
 
 		return nil
-	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	})
 
 	assert.NoError(t, err)
 	assert.NoError(t, ob.Close(ctx))

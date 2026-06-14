@@ -94,6 +94,10 @@ func (d *pgxpoolConn) Begin(ctx context.Context, opts ...octobe.Option[pgxConfig
 	}, nil
 }
 
+func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
+	return d.Begin(ctx, transactionOptions(opts)...)
+}
+
 func (d *pgxpoolConn) Close(_ context.Context) error {
 	d.pool.Close()
 	return nil
