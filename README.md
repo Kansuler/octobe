@@ -1,7 +1,5 @@
 # ![Octobe Logotype](https://raw.github.com/Kansuler/octobe/master/doc/octobe_logo.svg)
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Coverage/0d33b2e3bd9d410c949845214cb81e3e)](https://app.codacy.com/gh/Kansuler/octobe/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/0d33b2e3bd9d410c949845214cb81e3e)](https://app.codacy.com/gh/Kansuler/octobe/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![GoDoc](https://pkg.go.dev/badge/github.com/Kansuler/octobe.svg)](https://pkg.go.dev/github.com/Kansuler/octobe/v3)
 ![MIT License](https://img.shields.io/github/license/Kansuler/octobe)
 ![Tag](https://img.shields.io/github/v/tag/Kansuler/octobe)
@@ -170,11 +168,11 @@ func main() {
     }
 
     // Or manage the transaction manually.
-    session, err := db.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+    session, err := db.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
     if err != nil {
         panic(err)
     }
-    defer func() { _ = session.Rollback() }()
+    defer func() { _ = session.Close() }()
 
     product, err := octobe.Execute(session, CreateProduct("Another Widget"))
     if err != nil {
@@ -207,7 +205,9 @@ func TestCreateProduct(t *testing.T) {
 
     // 2. Set expectations
     rows := mock.NewRow(1, "Super Widget")
+    mockPool.ExpectAcquire()
     mockPool.ExpectQueryRow("INSERT INTO products").WithArgs("Super Widget").WillReturnRow(rows)
+    mockPool.ExpectRelease()
 
     // 3. Test your handler
     session, _ := db.Begin(ctx)
@@ -216,6 +216,7 @@ func TestCreateProduct(t *testing.T) {
     // 4. Assert results
     require.NoError(t, err)
     require.Equal(t, 1, product.ID)
+    require.NoError(t, session.Close())
     require.NoError(t, mockPool.AllExpectationsMet())
 }
 ```
@@ -366,7 +367,7 @@ func UpdateUser(id int, name string) octobe.Handler[octobe.Void, postgres.Builde
 
 ### How does Octobe handle connection pooling?
 
-Octobe uses the underlying driver's connection pooling (like pgxpool). Configure your pool settings when creating the driver:
+Octobe uses the underlying driver's connection pooling (like pgxpool). Non-transactional `Begin` sessions acquire one pool connection and keep it until `session.Close()`, so always close manually-created sessions. Configure your pool settings when creating the driver:
 
 ```go
 config, _ := pgxpool.ParseConfig(dsn)

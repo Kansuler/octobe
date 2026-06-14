@@ -179,7 +179,7 @@ func TestMock(t *testing.T) {
 		mock.ExpectBeginTx()
 		mock.ExpectCommit()
 
-		session, err := o.Begin(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Commit()
@@ -199,7 +199,7 @@ func TestMock(t *testing.T) {
 		mock.ExpectExec(query).WithArgs("test-user").WillReturnResult(pgconn.CommandTag{})
 		mock.ExpectCommit()
 
-		session, err := o.Begin(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		_, err = session.Builder()(query).Arguments("test-user").Exec()
@@ -220,7 +220,7 @@ func TestMock(t *testing.T) {
 		mock.ExpectBeginTx()
 		mock.ExpectRollback()
 
-		session, err := o.Begin(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Rollback()
@@ -247,6 +247,20 @@ func TestMock(t *testing.T) {
 		err = o.Ping(ctx)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrNoExpectation)
+	})
+
+	t.Run("Expectation order mismatch", func(t *testing.T) {
+		mock := NewPGXMock()
+		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
+		require.NoError(t, err)
+
+		mock.ExpectClose()
+		mock.ExpectPing()
+
+		err = o.Ping(ctx)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrNoExpectation)
+		require.Contains(t, err.Error(), "next expectation")
 	})
 
 	t.Run("Prepare success", func(t *testing.T) {
@@ -351,6 +365,22 @@ func TestMock(t *testing.T) {
 		require.Equal(t, expectedErr, err)
 		require.Equal(t, int64(0), rowsAffected)
 		require.NoError(t, mock.AllExpectationsMet())
+	})
+
+	t.Run("Scan destination count mismatch", func(t *testing.T) {
+		row := NewRow(1, "John Doe")
+		var id int
+		require.ErrorContains(t, row.Scan(&id), "scan expected 2 destinations, got 1")
+
+		rows := NewRows([]string{"id", "name"}).AddRow(1, "John Doe")
+		require.True(t, rows.Next())
+		require.ErrorContains(t, rows.Scan(&id), "scan expected 2 destinations, got 1")
+	})
+
+	t.Run("Scan invalid destination", func(t *testing.T) {
+		row := NewRow(1)
+		var id int
+		require.ErrorContains(t, row.Scan(id), "destination 0 must be a non-nil pointer")
 	})
 
 	t.Run("Rows RawValues", func(t *testing.T) {

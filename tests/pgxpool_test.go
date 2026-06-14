@@ -88,7 +88,7 @@ func (s *PGXPoolIntegrationSuite) TestStartTransactionRollsBackOnError() {
 func (s *PGXPoolIntegrationSuite) TestManualTransactionCommits() {
 	name := "pgxpool manual commit product"
 
-	session, err := s.db.Begin(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback() }()
 
@@ -104,7 +104,7 @@ func (s *PGXPoolIntegrationSuite) TestManualTransactionCommits() {
 func (s *PGXPoolIntegrationSuite) TestManualTransactionRollsBack() {
 	name := "pgxpool manual rollback product"
 
-	session, err := s.db.Begin(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback() }()
 
@@ -117,14 +117,29 @@ func (s *PGXPoolIntegrationSuite) TestManualTransactionRollsBack() {
 	s.Empty(products)
 }
 
+func (s *PGXPoolIntegrationSuite) TestNonTransactionalSessionPinsConnection() {
+	session, err := s.db.Begin(s.ctx)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(session.Close()) }()
+
+	first, err := octobe.Execute(session, backendPID())
+	s.Require().NoError(err)
+
+	second, err := octobe.Execute(session, backendPID())
+	s.Require().NoError(err)
+	s.Equal(first, second)
+}
+
 func (s *PGXPoolIntegrationSuite) findPGXPoolProduct(id int) (integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(session.Close()) }()
 	return octobe.Execute(session, productByID(pgxPoolProductsTable, id))
 }
 
 func (s *PGXPoolIntegrationSuite) findPGXPoolProductsByName(name string) ([]integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(session.Close()) }()
 	return octobe.Execute(session, productsByName(pgxPoolProductsTable, name))
 }

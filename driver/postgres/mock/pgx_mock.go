@@ -40,9 +40,10 @@ func (m *PGXMock) findExpectation(method string, args ...any) (expectation, erro
 		if e.fulfilled() {
 			continue
 		}
-		if err := e.match(method, args...); err == nil {
-			return e, nil
+		if err := e.match(method, args...); err != nil {
+			return nil, fmt.Errorf("%w: next expectation %s does not match %s with args %v: %w", ErrNoExpectation, e, method, args, err)
 		}
+		return e, nil
 	}
 
 	return nil, fmt.Errorf("%w for %s with args %v", ErrNoExpectation, method, args)

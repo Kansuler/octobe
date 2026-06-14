@@ -88,7 +88,7 @@ func (s *PGXIntegrationSuite) TestStartTransactionRollsBackOnError() {
 func (s *PGXIntegrationSuite) TestManualTransactionCommits() {
 	name := "pgx manual commit product"
 
-	session, err := s.db.Begin(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback() }()
 
@@ -104,7 +104,7 @@ func (s *PGXIntegrationSuite) TestManualTransactionCommits() {
 func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 	name := "pgx manual rollback product"
 
-	session, err := s.db.Begin(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback() }()
 
@@ -120,11 +120,13 @@ func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 func (s *PGXIntegrationSuite) findPGXProduct(id int) (integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(session.Close()) }()
 	return octobe.Execute(session, productByID(pgxProductsTable, id))
 }
 
 func (s *PGXIntegrationSuite) findPGXProductsByName(name string) ([]integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(session.Close()) }()
 	return octobe.Execute(session, productsByName(pgxProductsTable, name))
 }

@@ -156,6 +156,14 @@ func productsByName(table, name string) octobe.Handler[[]integrationProduct, pos
 	}
 }
 
+func backendPID() octobe.Handler[int, postgres.Builder] {
+	return func(builder postgres.Builder) (int, error) {
+		var pid int
+		err := builder(`SELECT pg_backend_pid()`).QueryRow(&pid)
+		return pid, err
+	}
+}
+
 func quoteIdentifier(identifier string) string {
 	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }

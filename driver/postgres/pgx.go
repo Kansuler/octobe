@@ -82,39 +82,46 @@ func OpenPGXWithConn(c PGXConn) octobe.Open[pgxConn, pgxConfig, Builder] {
 }
 
 // Begin starts a new session, optionally within a transaction if txOptions are provided.
-func (d *pgxConn) Begin(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
+// Non-transactional sessions execute directly on the underlying pgx connection.
+func (d *pgxConn) Begin(ctx context.Context) (octobe.Session[Builder], error) {
+	return &pgxSession{
+		ctx: ctx,
+		d:   d,
+	}, nil
+}
+
+// BeginTx starts a new transactional session.
+func (d *pgxConn) BeginTx(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
 	var cfg pgxConfig
-	for _, opt := range opts {
+	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
 	}
 
-	var tx pgx.Tx
-	var err error
+	var pgxOpts pgx.TxOptions
 	if cfg.txOptions != nil {
-		tx, err = d.conn.BeginTx(ctx, pgx.TxOptions{
+		pgxOpts = pgx.TxOptions{
 			IsoLevel:       cfg.txOptions.IsoLevel,
 			AccessMode:     cfg.txOptions.AccessMode,
 			DeferrableMode: cfg.txOptions.DeferrableMode,
 			BeginQuery:     cfg.txOptions.BeginQuery,
-		})
+		}
 	}
 
+	tx, err := d.conn.BeginTx(ctx, pgxOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pgxSession{
-		ctx: ctx,
-		cfg: cfg,
-		tx:  tx,
-		d:   d,
+		ctx:       ctx,
+		cfg:       cfg,
+		tx:        tx,
+		committed: false,
+		closed:    false,
 	}, nil
 }
 
-func (d *pgxConn) BeginTx(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
-	return d.Begin(ctx, transactionOptions(opts)...)
-}
-
+// Close closes the connection.
 func (d *pgxConn) Close(ctx context.Context) error {
 	if d.conn == nil {
 		return errors.New("connection is nil")
@@ -122,6 +129,7 @@ func (d *pgxConn) Close(ctx context.Context) error {
 	return d.conn.Close(ctx)
 }
 
+// Ping pings the connection.
 func (d *pgxConn) Ping(ctx context.Context) error {
 	if d.conn == nil {
 		return errors.New("connection is nil")
@@ -129,6 +137,7 @@ func (d *pgxConn) Ping(ctx context.Context) error {
 	return d.conn.Ping(ctx)
 }
 
+// StartTransaction starts a transactional session.
 func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...octobe.Option[pgxConfig]) (err error) {
 	return octobe.StartTransaction[pgxConn, pgxConfig, Builder](ctx, d, fn, opts...)
 }
@@ -141,6 +150,7 @@ type pgxSession struct {
 	tx        pgx.Tx
 	d         *pgxConn
 	committed bool
+	closed    bool
 }
 
 var _ octobe.Session[Builder] = &pgxSession{}
@@ -154,48 +164,75 @@ func (s *pgxSession) Commit() error {
 	if s.cfg.txOptions == nil {
 		return errors.New("cannot commit without transaction")
 	}
-	defer func() {
-		s.committed = true
-	}()
-	return s.tx.Commit(s.ctx)
+	if s.closed {
+		return errors.New("cannot commit a session that has already been closed")
+	}
+	err := s.tx.Commit(s.ctx)
+	s.committed = true
+	if err == nil {
+		s.closed = true
+	}
+	return err
 }
 
 // Rollback rolls back the transaction. Only works for transactional sessions.
 func (s *pgxSession) Rollback() error {
-	if s.cfg.txOptions == nil {
+	if s.tx == nil {
 		return errors.New("cannot rollback without transaction")
 	}
+	if s.closed {
+		return nil
+	}
+	defer func() {
+		s.closed = true
+	}()
 	return s.tx.Rollback(s.ctx)
+}
+
+// Close closes the session, rolling back if it is transactional and not committed.
+func (s *pgxSession) Close() error {
+	if s.closed {
+		return nil
+	}
+	if s.cfg.txOptions != nil {
+		return s.Rollback()
+	}
+	s.closed = true
+	return nil
 }
 
 // Builder returns a query builder function for this session.
 func (s *pgxSession) Builder() Builder {
 	return func(query string) Segment {
 		return &pgxSegment{
-			query: query,
-			args:  nil,
-			used:  false,
-			tx:    s.tx,
-			d:     s.d,
-			ctx:   s.ctx,
+			query:   query,
+			args:    nil,
+			used:    false,
+			session: s,
 		}
 	}
 }
 
 // pgxSegment represents a single-use query with arguments and execution tracking.
 type pgxSegment struct {
-	query string
-	args  []any
-	used  bool
-	tx    pgx.Tx
-	d     *pgxConn
-	ctx   context.Context
+	query   string
+	args    []any
+	used    bool
+	session *pgxSession
 }
 
 var _ Segment = &pgxSegment{}
 
 func (s *pgxSegment) use() {
 	s.used = true
+}
+
+// activeSession returns the session associated with this segment, or an error if it is closed.
+func (s *pgxSegment) activeSession() (*pgxSession, error) {
+	if s.session == nil || s.session.closed {
+		return nil, errors.New("session is closed")
+	}
+	return s.session, nil
 }
 
 // Arguments sets query parameters and returns the segment for method chaining.
@@ -210,8 +247,12 @@ func (s *pgxSegment) Exec() (ExecResult, error) {
 		return ExecResult{}, octobe.ErrAlreadyUsed
 	}
 	defer s.use()
-	if s.tx == nil {
-		res, err := s.d.conn.Exec(s.ctx, s.query, s.args...)
+	session, err := s.activeSession()
+	if err != nil {
+		return ExecResult{}, err
+	}
+	if session.tx == nil {
+		res, err := session.d.conn.Exec(session.ctx, s.query, s.args...)
 		if err != nil {
 			return ExecResult{}, err
 		}
@@ -221,7 +262,7 @@ func (s *pgxSegment) Exec() (ExecResult, error) {
 		}, nil
 	}
 
-	res, err := s.tx.Exec(s.ctx, s.query, s.args...)
+	res, err := session.tx.Exec(session.ctx, s.query, s.args...)
 	if err != nil {
 		return ExecResult{}, err
 	}
@@ -236,10 +277,14 @@ func (s *pgxSegment) QueryRow(dest ...any) error {
 		return octobe.ErrAlreadyUsed
 	}
 	defer s.use()
-	if s.tx == nil {
-		return s.d.conn.QueryRow(s.ctx, s.query, s.args...).Scan(dest...)
+	session, err := s.activeSession()
+	if err != nil {
+		return err
 	}
-	return s.tx.QueryRow(s.ctx, s.query, s.args...).Scan(dest...)
+	if session.tx == nil {
+		return session.d.conn.QueryRow(session.ctx, s.query, s.args...).Scan(dest...)
+	}
+	return session.tx.QueryRow(session.ctx, s.query, s.args...).Scan(dest...)
 }
 
 // Query executes the query and calls cb for each row in the result set.
@@ -249,15 +294,19 @@ func (s *pgxSegment) Query(cb func(Rows) error) error {
 	}
 	defer s.use()
 
-	var err error
+	session, err := s.activeSession()
+	if err != nil {
+		return err
+	}
+
 	var rows pgx.Rows
-	if s.tx == nil {
-		rows, err = s.d.conn.Query(s.ctx, s.query, s.args...)
+	if session.tx == nil {
+		rows, err = session.d.conn.Query(session.ctx, s.query, s.args...)
 		if err != nil {
 			return err
 		}
 	} else {
-		rows, err = s.tx.Query(s.ctx, s.query, s.args...)
+		rows, err = session.tx.Query(session.ctx, s.query, s.args...)
 		if err != nil {
 			return err
 		}

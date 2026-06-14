@@ -20,8 +20,10 @@ type PGXPoolMock struct {
 }
 
 var (
-	_ postgres.PGXPool = (*PGXPoolMock)(nil)
-	_ pgx.Tx           = (*PGXPoolMock)(nil)
+	_ postgres.PGXPool                = (*PGXPoolMock)(nil)
+	_ postgres.PGXPoolSessionAcquirer = (*PGXPoolMock)(nil)
+	_ postgres.PGXPoolSessionConn     = (*PGXPoolMock)(nil)
+	_ pgx.Tx                          = (*PGXPoolMock)(nil)
 )
 
 // NewPGXPoolMock creates a new mock database connection pool for testing.
@@ -38,9 +40,10 @@ func (m *PGXPoolMock) findExpectation(method string, args ...any) (expectation, 
 		if e.fulfilled() {
 			continue
 		}
-		if err := e.match(method, args...); err == nil {
-			return e, nil
+		if err := e.match(method, args...); err != nil {
+			return nil, fmt.Errorf("%w: next expectation %s does not match %s with args %v: %w", ErrNoExpectation, e, method, args, err)
 		}
+		return e, nil
 	}
 
 	return nil, fmt.Errorf("%w for %s with args %v", ErrNoExpectation, method, args)
@@ -91,6 +94,22 @@ func (m *PGXPoolMock) Close() {
 	if len(ret) > 0 && ret[0] != nil {
 		return
 	}
+}
+
+type ReleaseExpectation struct{ basicExpectation }
+
+func (m *PGXPoolMock) ExpectRelease() *ReleaseExpectation {
+	e := &ReleaseExpectation{basicExpectation: basicExpectation{method: "Release"}}
+	m.expectations = append(m.expectations, e)
+	return e
+}
+
+func (m *PGXPoolMock) Release() {
+	e, err := m.findExpectation("Release")
+	if err != nil {
+		return
+	}
+	e.getReturns()
 }
 
 // ExpectExec configures an expectation for an Exec operation with the specified query.
@@ -251,7 +270,7 @@ func (e *AcquireExpectation) WillReturnError(err error) {
 
 // ExpectAcquire configures an expectation for acquiring a connection from the pool.
 func (m *PGXPoolMock) ExpectAcquire() *AcquireExpectation {
-	e := &AcquireExpectation{basicExpectation: basicExpectation{method: "Acquire"}}
+	e := &AcquireExpectation{basicExpectation: basicExpectation{method: "Acquire", returns: []any{nil, nil}}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
@@ -269,6 +288,25 @@ func (m *PGXPoolMock) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
 		return nil, nil
 	}
 	return ret[0].(*pgxpool.Conn), nil
+}
+
+func (m *PGXPoolMock) AcquireSession(ctx context.Context) (postgres.PGXPoolSessionConn, error) {
+	e, err := m.findExpectation("Acquire")
+	if err != nil {
+		return nil, err
+	}
+	ret := e.getReturns()
+	if ret[1] != nil {
+		return nil, ret[1].(error)
+	}
+	if ret[0] == nil {
+		return m, nil
+	}
+	conn, ok := ret[0].(postgres.PGXPoolSessionConn)
+	if !ok {
+		return nil, fmt.Errorf("acquired connection does not implement postgres.PGXPoolSessionConn")
+	}
+	return conn, nil
 }
 
 type AcquireFuncExpectation struct {

@@ -185,10 +185,51 @@ func (r *Row) Scan(dest ...any) error {
 	if r.err != nil {
 		return r.err
 	}
-	for i, val := range r.row {
-		reflect.ValueOf(dest[i]).Elem().Set(reflect.ValueOf(val))
+	return scanValues(r.row, dest)
+}
+
+func scanValues(values []any, dest []any) error {
+	if len(dest) != len(values) {
+		return fmt.Errorf("scan expected %d destinations, got %d", len(values), len(dest))
 	}
+
+	for i, val := range values {
+		target := reflect.ValueOf(dest[i])
+		if !target.IsValid() || target.Kind() != reflect.Pointer || target.IsNil() {
+			return fmt.Errorf("destination %d must be a non-nil pointer", i)
+		}
+
+		elem := target.Elem()
+		if val == nil {
+			if !canSetNil(elem.Kind()) {
+				return fmt.Errorf("cannot scan nil into destination %d of type %s", i, elem.Type())
+			}
+			elem.Set(reflect.Zero(elem.Type()))
+			continue
+		}
+
+		source := reflect.ValueOf(val)
+		if source.Type().AssignableTo(elem.Type()) {
+			elem.Set(source)
+			continue
+		}
+		if source.Type().ConvertibleTo(elem.Type()) {
+			elem.Set(source.Convert(elem.Type()))
+			continue
+		}
+		return fmt.Errorf("cannot scan %T into destination %d of type %s", val, i, elem.Type())
+	}
+
 	return nil
+}
+
+func canSetNil(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return true
+	default:
+		return false
+	}
 }
 
 // Rows provides a mock implementation of pgx.Rows for testing Query operations.
@@ -245,10 +286,7 @@ func (r *Rows) Scan(dest ...any) error {
 	if r.pos < 0 || r.pos >= len(r.rows) {
 		return io.EOF
 	}
-	for i, val := range r.rows[r.pos] {
-		reflect.ValueOf(dest[i]).Elem().Set(reflect.ValueOf(val))
-	}
-	return nil
+	return scanValues(r.rows[r.pos], dest)
 }
 
 func (r *Rows) Values() ([]any, error) {

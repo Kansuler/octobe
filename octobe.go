@@ -32,7 +32,7 @@ var ErrAlreadyUsed = errors.New("segment has already been executed - segments ca
 //
 // Example:
 //
-//	db.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{
+//	db.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{
 //	    IsoLevel: pgx.ReadCommitted,
 //	}))
 type Option[CONFIG any] func(cfg *CONFIG)
@@ -47,10 +47,10 @@ type Option[CONFIG any] func(cfg *CONFIG)
 // Implementations handle connection pooling, transaction lifecycle, and driver-specific
 // optimizations while providing a consistent interface across database types.
 type Driver[DRIVER any, CONFIG any, BUILDER any] interface {
-	// Begin starts a new database session. Driver-specific options can make it transactional.
-	Begin(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error)
+	// Begin starts a new non-transactional database session.
+	Begin(ctx context.Context) (Session[BUILDER], error)
 
-	// BeginTx starts a transactional database session even when no transaction options are provided.
+	// BeginTx starts a transactional database session.
 	BeginTx(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error)
 
 	// Close releases all database connections and resources.
@@ -96,8 +96,9 @@ func New[DRIVER any, CONFIG any, BUILDER any](init Open[DRIVER, CONFIG, BUILDER]
 // Session represents an active database session that may or may not be transactional.
 //
 // Transactional sessions (created with transaction options) maintain ACID properties
-// and must call Commit() to persist changes or Rollback() to discard them.
-// Non-transactional sessions execute queries immediately without transaction boundaries.
+// and must call Commit() to persist changes or Rollback() or Close() to discard them.
+// Non-transactional sessions execute queries immediately without transaction boundaries
+// and must call Close() to release session resources.
 //
 // Sessions embed BuilderSession to provide direct access to query construction methods.
 type Session[BUILDER any] interface {
@@ -109,6 +110,10 @@ type Session[BUILDER any] interface {
 	// Only valid for transactional sessions.
 	Rollback() error
 
+	// Close releases session resources. For uncommitted transactional sessions,
+	// Close rolls back the transaction. Close is idempotent.
+	Close() error
+
 	BuilderSession[BUILDER]
 }
 
@@ -119,8 +124,7 @@ type Session[BUILDER any] interface {
 // The Builder creates Segment instances that represent prepared queries with arguments.
 type BuilderSession[BUILDER any] interface {
 	// Builder returns a query builder function for this session.
-	// Each call to Builder() creates segments that are scoped to this session's
-	// transaction (if transactional) or connection (if non-transactional).
+	// Each call to Builder() creates segments scoped to this session.
 	Builder() BUILDER
 }
 

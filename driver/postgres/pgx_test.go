@@ -75,7 +75,7 @@ func TestPGXWithTx(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	session, err := ob.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := ob.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -296,7 +296,7 @@ func TestPGXWithTxManualRollback(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	session, err := ob.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := ob.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -507,7 +507,7 @@ func TestBeginError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err = ob.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	_, err = ob.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	assert.ErrorIs(t, err, expectedErr)
 
 	err = ob.Close(ctx)
@@ -528,7 +528,7 @@ func TestCommitError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	session, err := ob.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := ob.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
