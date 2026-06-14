@@ -133,7 +133,7 @@ type BuilderSession[BUILDER any] interface {
 //
 // Example:
 //
-//	func DeleteUser(id int) octobe.Handler[octobe.Void] {
+//	func DeleteUser(id int) octobe.Handler[octobe.Void, postgres.Builder] {
 //	    return func(builder postgres.Builder) (octobe.Void, error) {
 //	        query := builder(`DELETE FROM users WHERE id = $1`)
 //	        _, err := query.Arguments(id).Exec()
@@ -199,8 +199,8 @@ func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver D
 //
 // Example:
 //
-//	func GetUser(id int) Handler[User] {
-//	    return func(builder Builder) (User, error) {
+//	func GetUser(id int) octobe.Handler[User, postgres.Builder] {
+//	    return func(builder postgres.Builder) (User, error) {
 //	        var user User
 //	        query := builder(`SELECT id, name, email FROM users WHERE id = $1`)
 //	        err := query.Arguments(id).QueryRow(&user.ID, &user.Name, &user.Email)
