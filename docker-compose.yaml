@@ -21,5 +21,5 @@ services:
     command: >
       bash -c "
           go install gotest.tools/gotestsum@latest &&
-          gotestsum -- -coverprofile=coverage.txt -timeout=10s -v -count=1 -coverpkg=./... -covermode=atomic ./driver/...
+          gotestsum -- -coverprofile=coverage.txt -timeout=10s -v -count=1 -coverpkg=./... -covermode=atomic ./...
       "

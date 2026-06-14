@@ -17,9 +17,24 @@ concurrency:
 
 jobs:
   live-unit-tests:
-    name: Live unit tests
+    name: Live integration tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d testdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -35,6 +50,8 @@ jobs:
         run: go mod download
 
       - name: Run all test suites with coverage
+        env:
+          DSN: "postgresql://user:password@localhost:5432/testdb?sslmode=disable&connect_timeout=10"
         run: go test -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
 
       - name: Generate coverage reports
