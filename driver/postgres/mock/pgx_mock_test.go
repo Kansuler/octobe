@@ -422,4 +422,34 @@ func TestMock(t *testing.T) {
 		require.Equal(t, []byte("1"), rawValues[0])
 		require.Nil(t, rawValues[1])
 	})
+
+	t.Run("Exact query matching rejects extra SQL", func(t *testing.T) {
+		mock := NewPGXMock()
+		mock.ExpectExec("SELECT id FROM users").WillReturnResult(pgconn.CommandTag{})
+
+		_, err := mock.Exec(ctx, "SELECT id FROM users WHERE active = true")
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrNoExpectation)
+		require.Contains(t, err.Error(), "query mismatch")
+	})
+
+	t.Run("Contains query matching", func(t *testing.T) {
+		mock := NewPGXMock()
+		mock.ExpectExec("SELECT id FROM users").Contains().WillReturnResult(pgconn.CommandTag{})
+
+		_, err := mock.Exec(ctx, "SELECT id FROM users WHERE active = true")
+		require.NoError(t, err)
+		require.NoError(t, mock.AllExpectationsMet())
+	})
+
+	t.Run("Regex query matching", func(t *testing.T) {
+		mock := NewPGXMock()
+		mock.ExpectQueryRow(`SELECT id FROM users WHERE id = \d+`).Regex().WillReturnRow(NewRow(7))
+
+		var id int
+		err := mock.QueryRow(ctx, "SELECT id FROM users WHERE id = 7").Scan(&id)
+		require.NoError(t, err)
+		require.Equal(t, 7, id)
+		require.NoError(t, mock.AllExpectationsMet())
+	})
 }

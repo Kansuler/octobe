@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,11 +20,22 @@ type expectation interface {
 	String() string
 }
 
+type queryMatchMode int
+
+const (
+	queryMatchNone queryMatchMode = iota
+	queryMatchExact
+	queryMatchContains
+	queryMatchRegex
+)
+
 type basicExpectation struct {
 	method      string
 	isFulfilled bool
 	returns     []any
-	query       *regexp.Regexp
+	query       string
+	queryRE     *regexp.Regexp
+	queryMatch  queryMatchMode
 	args        []any
 }
 
@@ -40,19 +52,32 @@ func (e *basicExpectation) WithArgs(args ...any) {
 	e.args = args
 }
 
+func (e *basicExpectation) setContains() {
+	e.queryMatch = queryMatchContains
+	e.queryRE = nil
+}
+
+func (e *basicExpectation) setRegex() {
+	e.queryMatch = queryMatchRegex
+	e.queryRE = regexp.MustCompile(e.query)
+}
+
 // match validates that the method call matches the expected signature and arguments.
 func (e *basicExpectation) match(method string, args ...any) error {
 	if e.method != method {
 		return fmt.Errorf("method mismatch: expected %s, got %s", e.method, method)
 	}
 
-	if e.query != nil {
+	if e.queryMatch != queryMatchNone {
+		if len(args) == 0 {
+			return fmt.Errorf("missing query argument")
+		}
 		query, ok := args[0].(string)
 		if !ok {
 			return fmt.Errorf("first argument was not a string query")
 		}
-		if !e.query.MatchString(query) {
-			return fmt.Errorf("query does not match regexp %s", e.query)
+		if err := e.matchQuery(query); err != nil {
+			return err
 		}
 		args = args[1:]
 	}
@@ -66,12 +91,33 @@ func (e *basicExpectation) match(method string, args ...any) error {
 	return nil
 }
 
+func (e *basicExpectation) matchQuery(query string) error {
+	switch e.queryMatch {
+	case queryMatchExact:
+		if query != e.query {
+			return fmt.Errorf("query mismatch: expected %q, got %q", e.query, query)
+		}
+	case queryMatchContains:
+		if !strings.Contains(query, e.query) {
+			return fmt.Errorf("query does not contain %q", e.query)
+		}
+	case queryMatchRegex:
+		if !e.queryRE.MatchString(query) {
+			return fmt.Errorf("query does not match regexp %s", e.queryRE)
+		}
+	}
+	return nil
+}
+
 func (e *basicExpectation) String() string {
-	var queryStr string
-	if e.query != nil {
-		queryStr = e.query.String()
-	} else {
-		queryStr = "<nil>"
+	queryStr := "<nil>"
+	switch e.queryMatch {
+	case queryMatchExact:
+		queryStr = fmt.Sprintf("exact %q", e.query)
+	case queryMatchContains:
+		queryStr = fmt.Sprintf("contains %q", e.query)
+	case queryMatchRegex:
+		queryStr = fmt.Sprintf("regexp %s", e.queryRE)
 	}
 	return fmt.Sprintf("method %s with query %s and args %v", e.method, queryStr, e.args)
 }
@@ -106,6 +152,18 @@ func (e *ExecExpectation) WithArgs(args ...any) *ExecExpectation {
 	return e
 }
 
+// Contains makes this expectation match queries containing the configured query string.
+func (e *ExecExpectation) Contains() *ExecExpectation {
+	e.setContains()
+	return e
+}
+
+// Regex makes this expectation match queries with the configured regular expression.
+func (e *ExecExpectation) Regex() *ExecExpectation {
+	e.setRegex()
+	return e
+}
+
 func (e *ExecExpectation) WillReturnResult(res pgconn.CommandTag) {
 	e.returns = []any{res, nil}
 }
@@ -123,6 +181,18 @@ func (e *QueryExpectation) WithArgs(args ...any) *QueryExpectation {
 	return e
 }
 
+// Contains makes this expectation match queries containing the configured query string.
+func (e *QueryExpectation) Contains() *QueryExpectation {
+	e.setContains()
+	return e
+}
+
+// Regex makes this expectation match queries with the configured regular expression.
+func (e *QueryExpectation) Regex() *QueryExpectation {
+	e.setRegex()
+	return e
+}
+
 func (e *QueryExpectation) WillReturnRows(rows pgx.Rows) {
 	e.returns = []any{rows, nil}
 }
@@ -137,6 +207,18 @@ type QueryRowExpectation struct {
 
 func (e *QueryRowExpectation) WithArgs(args ...any) *QueryRowExpectation {
 	e.basicExpectation.WithArgs(args...)
+	return e
+}
+
+// Contains makes this expectation match queries containing the configured query string.
+func (e *QueryRowExpectation) Contains() *QueryRowExpectation {
+	e.setContains()
+	return e
+}
+
+// Regex makes this expectation match queries with the configured regular expression.
+func (e *QueryRowExpectation) Regex() *QueryRowExpectation {
+	e.setRegex()
 	return e
 }
 

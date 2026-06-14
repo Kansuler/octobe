@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"sync"
 
 	"github.com/Kansuler/octobe/v3/driver/postgres"
@@ -101,8 +100,9 @@ func (m *PGXMock) Close(ctx context.Context) error {
 func (m *PGXMock) ExpectExec(query string) *ExecExpectation {
 	e := &ExecExpectation{
 		basicExpectation: basicExpectation{
-			method: "Exec",
-			query:  regexp.MustCompile(regexp.QuoteMeta(query)),
+			method:     "Exec",
+			query:      query,
+			queryMatch: queryMatchExact,
 		},
 	}
 	m.expectations = append(m.expectations, e)
@@ -125,8 +125,9 @@ func (m *PGXMock) Exec(ctx context.Context, query string, args ...any) (pgconn.C
 func (m *PGXMock) ExpectQuery(query string) *QueryExpectation {
 	e := &QueryExpectation{
 		basicExpectation: basicExpectation{
-			method: "Query",
-			query:  regexp.MustCompile(regexp.QuoteMeta(query)),
+			method:     "Query",
+			query:      query,
+			queryMatch: queryMatchExact,
 		},
 	}
 	m.expectations = append(m.expectations, e)
@@ -152,8 +153,9 @@ func (m *PGXMock) Query(ctx context.Context, query string, args ...any) (pgx.Row
 func (m *PGXMock) ExpectQueryRow(query string) *QueryRowExpectation {
 	e := &QueryRowExpectation{
 		basicExpectation: basicExpectation{
-			method: "QueryRow",
-			query:  regexp.MustCompile(regexp.QuoteMeta(query)),
+			method:     "QueryRow",
+			query:      query,
+			queryMatch: queryMatchExact,
 		},
 	}
 	m.expectations = append(m.expectations, e)

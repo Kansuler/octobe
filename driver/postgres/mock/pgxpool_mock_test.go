@@ -411,4 +411,24 @@ func TestPoolMock(t *testing.T) {
 		require.Equal(t, int64(0), rowsAffected)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
+
+	t.Run("Unexpected Close is reported", func(t *testing.T) {
+		mock := NewPGXPoolMock()
+
+		mock.Close()
+
+		err := mock.AllExpectationsMet()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unexpected Close")
+	})
+
+	t.Run("Unexpected Release is reported", func(t *testing.T) {
+		mock := NewPGXPoolMock()
+
+		mock.Release()
+
+		err := mock.AllExpectationsMet()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unexpected Release")
+	})
 }

@@ -2,8 +2,8 @@ package mock
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"regexp"
 	"sync"
 
 	"github.com/Kansuler/octobe/v3/driver/postgres"
@@ -15,8 +15,9 @@ import (
 // PGXPoolMock provides a mock implementation of postgres.PGXPool and pgx.Tx interfaces
 // for testing database pool interactions without requiring an actual database connection.
 type PGXPoolMock struct {
-	mu           sync.Mutex
-	expectations []expectation
+	mu              sync.Mutex
+	expectations    []expectation
+	unexpectedCalls []error
 }
 
 var (
@@ -49,10 +50,19 @@ func (m *PGXPoolMock) findExpectation(method string, args ...any) (expectation, 
 	return nil, fmt.Errorf("%w for %s with args %v", ErrNoExpectation, method, args)
 }
 
+func (m *PGXPoolMock) recordUnexpectedCall(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.unexpectedCalls = append(m.unexpectedCalls, err)
+}
+
 // AllExpectationsMet verifies that all configured expectations have been fulfilled.
 func (m *PGXPoolMock) AllExpectationsMet() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.unexpectedCalls) > 0 {
+		return errors.Join(m.unexpectedCalls...)
+	}
 	for _, e := range m.expectations {
 		if !e.fulfilled() {
 			return fmt.Errorf("unfulfilled expectation: %s", e)
@@ -88,6 +98,7 @@ func (m *PGXPoolMock) ExpectClose() *CloseExpectation {
 func (m *PGXPoolMock) Close() {
 	e, err := m.findExpectation("Close")
 	if err != nil {
+		m.recordUnexpectedCall(fmt.Errorf("unexpected Close: %w", err))
 		return
 	}
 	ret := e.getReturns()
@@ -107,6 +118,7 @@ func (m *PGXPoolMock) ExpectRelease() *ReleaseExpectation {
 func (m *PGXPoolMock) Release() {
 	e, err := m.findExpectation("Release")
 	if err != nil {
+		m.recordUnexpectedCall(fmt.Errorf("unexpected Release: %w", err))
 		return
 	}
 	e.getReturns()
@@ -116,8 +128,9 @@ func (m *PGXPoolMock) Release() {
 func (m *PGXPoolMock) ExpectExec(query string) *ExecExpectation {
 	e := &ExecExpectation{
 		basicExpectation: basicExpectation{
-			method: "Exec",
-			query:  regexp.MustCompile(regexp.QuoteMeta(query)),
+			method:     "Exec",
+			query:      query,
+			queryMatch: queryMatchExact,
 		},
 	}
 	m.expectations = append(m.expectations, e)
@@ -140,8 +153,9 @@ func (m *PGXPoolMock) Exec(ctx context.Context, query string, args ...any) (pgco
 func (m *PGXPoolMock) ExpectQuery(query string) *QueryExpectation {
 	e := &QueryExpectation{
 		basicExpectation: basicExpectation{
-			method: "Query",
-			query:  regexp.MustCompile(regexp.QuoteMeta(query)),
+			method:     "Query",
+			query:      query,
+			queryMatch: queryMatchExact,
 		},
 	}
 	m.expectations = append(m.expectations, e)
@@ -167,8 +181,9 @@ func (m *PGXPoolMock) Query(ctx context.Context, query string, args ...any) (pgx
 func (m *PGXPoolMock) ExpectQueryRow(query string) *QueryRowExpectation {
 	e := &QueryRowExpectation{
 		basicExpectation: basicExpectation{
-			method: "QueryRow",
-			query:  regexp.MustCompile(regexp.QuoteMeta(query)),
+			method:     "QueryRow",
+			query:      query,
+			queryMatch: queryMatchExact,
 		},
 	}
 	m.expectations = append(m.expectations, e)
