@@ -5,427 +5,232 @@
 ![Tag](https://img.shields.io/github/v/tag/Kansuler/octobe)
 ![Version](https://img.shields.io/github/go-mod/go-version/Kansuler/octobe)
 
-**Raw SQL power. Zero boilerplate. One API for any database.**
+**Octobe is a small Go package for raw SQL handlers with transaction management built in.**
+Write the SQL you would write for `pgx`, wrap it in typed handler functions, and run those handlers through a shared session or an automatically committed/rolled-back transaction.
 
-Stop writing the same transaction management code over and over. Octobe gives you clean, testable database handlers with automatic transaction lifecycle management.
+Use Octobe when you want:
 
-## The Problem vs. The Solution
+- raw SQL, not an ORM model layer
+- one transaction API for create/read/update flows
+- reusable, typed database operations with http-like handlers
+- pgx/pgxpool support
 
-**Without Octobe** - Messy, repetitive, error-prone:
-
-```go
-func CreateUser(db *sql.DB, name string) (*User, error) {
-    tx, err := db.Begin()
-    if err != nil {
-        return nil, err
-    }
-    defer func() {
-        if err != nil {
-            tx.Rollback()
-            return
-        }
-        tx.Commit()
-    }()
-
-    var user User
-    err = tx.QueryRow("INSERT INTO users (name) VALUES ($1) RETURNING id, name", name).
-        Scan(&user.ID, &user.Name)
-    return &user, err
-}
-```
-
-**With Octobe** - Clean, structured, automatic:
-
-```go
-func CreateUser(name string) octobe.Handler[User, postgres.Builder] {
-    return func(builder postgres.Builder) (User, error) {
-        var user User
-        query := builder(`INSERT INTO users (name) VALUES ($1) RETURNING id, name`)
-        err := query.Arguments(name).QueryRow(&user.ID, &user.Name)
-        return user, err
-    }
-}
-
-// Usage - transaction management is automatic
-user, err := octobe.Execute(session, CreateUser("Alice"))
-```
-
-## Why Octobe?
-
-✅ **Zero boilerplate** - No more manual transaction begin/commit/rollback
-
-✅ **Raw SQL freedom** - Write the queries you want, not what an ORM allows
-
-✅ **Built for testing** - Mock any database interaction with ease
-
-✅ **Database agnostic** - One API for PostgreSQL and more (coming soon)
-
-✅ **Production ready** - Handle panics, errors, and edge cases automatically
-
-## Quick Start
-
-Install:
+## Quick example
 
 ```bash
 go get github.com/Kansuler/octobe/v3
 ```
 
-Use:
-
 ```go
-// 1. Create handlers (your SQL logic)
-func GetProduct(id int) octobe.Handler[Product, postgres.Builder] {
-    return func(builder postgres.Builder) (Product, error) {
-        var p Product
-        query := builder(`SELECT id, name FROM products WHERE id = $1`)
-        err := query.Arguments(id).QueryRow(&p.ID, &p.Name)
-        return p, err
-    }
-}
-
-// 2. Execute with automatic transaction management
-db, _ := octobe.New(postgres.OpenPGXPool(ctx, dsn))
-err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-    product, err := octobe.Execute(session, GetProduct(123))
-    if err != nil {
-        return err // Automatic rollback
-    }
-    fmt.Printf("Product: %+v\n", product)
-    return nil // Automatic commit
-})
-```
-
-That's it. No manual transaction management, no connection handling, no boilerplate.
-
-## Full Example
-
-Here's a complete example showing the handler pattern in action:
-
-```go
-package main
+package users
 
 import (
-    "context"
-    "fmt"
-    "os"
+	"context"
+	"os"
 
-    "github.com/Kansuler/octobe/v3"
-    "github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v3"
+	"github.com/Kansuler/octobe/v3/driver/postgres"
 )
 
-type Product struct {
-    ID   int
-    Name string
-}
-
-// Handlers are pure functions that encapsulate SQL logic
-func CreateProduct(name string) octobe.Handler[Product, postgres.Builder] {
-    return func(builder postgres.Builder) (Product, error) {
-        var product Product
-        query := builder(`INSERT INTO products (name) VALUES ($1) RETURNING id, name`)
-        err := query.Arguments(name).QueryRow(&product.ID, &product.Name)
-        return product, err
-    }
-}
-
-func GetProduct(id int) octobe.Handler[Product, postgres.Builder] {
-    return func(builder postgres.Builder) (Product, error) {
-        var product Product
-        query := builder(`SELECT id, name FROM products WHERE id = $1`)
-        err := query.Arguments(id).QueryRow(&product.ID, &product.Name)
-        return product, err
-    }
-}
-
-func main() {
-    ctx := context.Background()
-    db, err := octobe.New(postgres.OpenPGXPool(ctx, os.Getenv("DSN")))
-    if err != nil {
-        panic(err)
-    }
-    defer db.Close(ctx)
-
-    // Everything happens in one transaction - automatic begin/commit/rollback
-    err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-        // Create product
-        product, err := octobe.Execute(session, CreateProduct("Super Widget"))
-        if err != nil {
-            return err // Automatic rollback on any error
-        }
-
-        // Fetch it back
-        fetched, err := octobe.Execute(session, GetProduct(product.ID))
-        if err != nil {
-            return err
-        }
-
-        fmt.Printf("Created and fetched: %+v\n", fetched)
-        return nil // Automatic commit
-    })
-
-    if err != nil {
-        panic(err)
-    }
-
-    // Or manage the transaction manually.
-    session, err := db.BeginTx(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
-    if err != nil {
-        panic(err)
-    }
-    defer func() { _ = session.Close() }()
-
-    product, err := octobe.Execute(session, CreateProduct("Another Widget"))
-    if err != nil {
-        panic(err)
-    }
-
-    fetched, err := octobe.Execute(session, GetProduct(product.ID))
-    if err != nil {
-        panic(err)
-    }
-
-    fmt.Printf("Created and fetched: %+v\n", fetched)
-    if err := session.Commit(); err != nil {
-        panic(err)
-    }
-}
-```
-
-## Testing Made Simple
-
-Mock any handler without touching your database:
-
-```go
-func TestCreateProduct(t *testing.T) {
-    ctx := context.Background()
-
-    // 1. Create mock
-    mockPool := mock.NewPGXPoolMock()
-    db, _ := octobe.New(postgres.OpenPGXWithPool(mockPool))
-
-    // 2. Set expectations
-    rows := mock.NewRow(1, "Super Widget")
-    mockPool.ExpectAcquire()
-    mockPool.ExpectQueryRow("INSERT INTO products").WithArgs("Super Widget").WillReturnRow(rows)
-    mockPool.ExpectRelease()
-
-    // 3. Test your handler
-    session, _ := db.Begin(ctx)
-    product, err := octobe.Execute(session, CreateProduct("Super Widget"))
-
-    // 4. Assert results
-    require.NoError(t, err)
-    require.Equal(t, 1, product.ID)
-    require.NoError(t, session.Close())
-    require.NoError(t, mockPool.AllExpectationsMet())
-}
-```
-
-## Migration Guide
-
-### From database/sql
-
-**Before (database/sql):**
-
-```go
-func GetUser(db *sql.DB, id int) (*User, error) {
-    tx, err := db.Begin()
-    if err != nil {
-        return nil, err
-    }
-    defer func() {
-        if err != nil {
-            tx.Rollback()
-            return
-        }
-        tx.Commit()
-    }()
-
-    var user User
-    err = tx.QueryRow("SELECT id, name FROM users WHERE id = ?", id).
-        Scan(&user.ID, &user.Name)
-    return &user, err
-}
-```
-
-**After (Octobe):**
-
-```go
-func GetUser(id int) octobe.Handler[User, postgres.Builder] {
-    return func(builder postgres.Builder) (User, error) {
-        var user User
-        err := builder(`SELECT id, name FROM users WHERE id = $1`).
-        	Arguments(id).
-         	QueryRow(&user.ID, &user.Name)
-        return user, err
-    }
-}
-
-// Usage
-user, err := octobe.Execute(session, GetUser(123))
-// Or with automatic transaction management:
-var user User
-err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-    user, err := octobe.Execute(session, GetUser(123))
-    return err
-}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
-```
-
-### From GORM
-
-**Before (GORM):**
-
-```go
 type User struct {
-    ID   uint   `gorm:"primaryKey"`
-    Name string
+	ID    int
+	Email string
 }
 
-func GetUserWithPosts(db *gorm.DB, userID uint) (User, []Post, error) {
-    var user User
-    var posts []Post
+const insertUserSQL = `INSERT INTO users (email) VALUES ($1) RETURNING id, email`
 
-    err := db.First(&user, userID).Error
-    if err != nil {
-        return user, posts, err
-    }
+func CreateUser(email string) octobe.Handler[User, postgres.Builder] {
+	return func(sql postgres.Builder) (User, error) {
+		var user User
+		err := sql(insertUserSQL).
+			Arguments(email).
+			QueryRow(&user.ID, &user.Email)
+		return user, err
+	}
+}
 
-    err = db.Where("user_id = ?", userID).Find(&posts).Error
-    return user, posts, err
+func Signup(ctx context.Context, email string) (User, error) {
+	db, err := octobe.New(postgres.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
+	if err != nil {
+		return User{}, err
+	}
+	defer db.Close(ctx)
+
+	var user User
+	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+		var err error
+		user, err = octobe.Execute(session, CreateUser(email))
+		return err
+	})
+	return user, err
 }
 ```
 
-**After (Octobe):**
+`StartTransaction` commits when the callback returns `nil`, rolls back when it returns an error, and rolls back before re-panicking on panic.
+
+## What you write
+
+Handlers keep SQL close to the result type:
 
 ```go
-type UserWithPosts struct {
-	User  User
-	Posts []Post
-}
+func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
+	return func(sql postgres.Builder) ([]User, error) {
+		query := sql(`
+			SELECT id, email
+			FROM users
+			WHERE email LIKE $1
+			ORDER BY id
+		`)
 
-func PostsByUserID(userID int) octobe.Handler[UserWithPosts, postgres.Builder] {
-	return func(builder postgres.Builder) (UserWithPosts, error) {
-		var result UserWithPosts
-		err := builder(`
-			SELECT
-				u.id, u.name,
-				p.id, p.title, p.content
-			FROM users u
-			LEFT JOIN posts p ON p.user_id = u.id
-			WHERE u.id = $1
-		`).
-		Arguments(userID).
-		Query(func(rows postgres.Rows) error {
+		var users []User
+		err := query.Arguments("%@" + domain).Query(func(rows postgres.Rows) error {
 			for rows.Next() {
-				var post Post
-				err := rows.Scan(&result.User.ID, &result.User.Name, &post.ID, &post.Title, &post.Content)
-				if err != nil {
+				var user User
+				if err := rows.Scan(&user.ID, &user.Email); err != nil {
 					return err
 				}
-				result.Posts = append(result.Posts, post)
+				users = append(users, user)
 			}
-			return nil
+			return rows.Err()
 		})
-		
-		return result, err
+
+		return users, err
 	}
 }
 ```
 
-### From Squirrel
-
-**Before (Squirrel):**
+Compose several operations in the same transaction:
 
 ```go
-func UpdateUser(db *sql.DB, id int, name string) error {
-    sql, args, err := squirrel.
-        Update("users").
-        Set("name", name).
-        Where(squirrel.Eq{"id": id}).
-        PlaceholderFormat(squirrel.Dollar).
-        ToSql()
-    if err != nil {
-        return err
-    }
+err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+	user, err := octobe.Execute(session, CreateUser("alice@example.com"))
+	if err != nil {
+		return err
+	}
 
-    _, err = db.Exec(sql, args...)
-    return err
+	return octobe.ExecuteVoid(session, CreateAuditEvent(user.ID, "signup"))
+})
+```
+
+Use manual sessions when you need to control the lifecycle yourself:
+
+```go
+session, err := db.Begin(ctx) // pgxpool: pins one pool connection until Close
+if err != nil {
+	return err
+}
+defer session.Close()
+
+user, err := octobe.Execute(session, GetUser(123))
+```
+
+## Why use Octobe instead of another package?
+
+| If you reach for... | Octobe helps when... |
+| --- | --- |
+| `database/sql` or plain `pgx` | your functions keep repeating begin/commit/rollback and passing `*sql.Tx` or `pgx.Tx` around |
+| an ORM | you want explicit SQL, joins, CTEs, vendor features, and hand-written scans |
+| a SQL builder | you already know the SQL and do not need a fluent API to generate it |
+| repository interfaces | you want small, reusable functions plus driver-level mocks instead of a custom interface per repository |
+
+## Features
+
+- **Typed handlers**: `octobe.Handler[Result, postgres.Builder]` returns concrete Go types.
+- **Automatic transactions**: `StartTransaction` handles begin, commit, rollback, cleanup, and panic rollback.
+- **Manual sessions**: use `Begin` or `BeginTx` when you need explicit lifecycle control.
+- **Raw SQL execution**: `Exec`, `QueryRow`, and callback-based `Query` map directly to pgx-style operations.
+- **PostgreSQL driver**: supports `pgx.Conn`, `pgxpool.Pool`, DSNs, and existing connections/pools.
+- **Testing mocks**: `driver/postgres/mock` lets tests expect queries, rows, transactions, commits, rollbacks, and pool behavior.
+- **Single-use query segments**: a query segment can only execute once, preventing accidental reuse.
+
+## What Octobe is not
+
+- **Not an ORM**: no model mapping, lazy loading, migrations, relationship management, or generated queries.
+- **Not a SQL builder**: Octobe does not construct SQL for you; you provide the statement.
+- **Not a database portability layer today**: the current driver is PostgreSQL via pgx/pgxpool.
+- **Not a connection pool replacement**: configure pooling on pgxpool, then pass the pool or DSN to Octobe.
+
+## PostgreSQL setup
+
+Create from a DSN:
+
+```go
+db, err := octobe.New(postgres.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
+```
+
+Or use an existing pool:
+
+```go
+config, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+if err != nil {
+	return err
+}
+config.MaxConns = 20
+
+pool, err := pgxpool.NewWithConfig(ctx, config)
+if err != nil {
+	return err
+}
+
+db, err := octobe.New(postgres.OpenPGXWithPool(pool))
+```
+
+Set transaction options when needed:
+
+```go
+err := db.StartTransaction(
+	ctx,
+	func(session octobe.BuilderSession[postgres.Builder]) error {
+		return octobe.ExecuteVoid(session, RebuildReport())
+	},
+	postgres.WithPGXTxOptions(postgres.PGXTxOptions{IsoLevel: pgx.Serializable}),
+)
+```
+
+## Testing without a database
+
+```go
+func TestCreateUser(t *testing.T) {
+	ctx := context.Background()
+	pgxMock := mock.NewPGXPoolMock()
+
+	db, err := octobe.New(postgres.OpenPGXWithPool(pgxMock))
+	require.NoError(t, err)
+
+	pgxMock.ExpectBeginTx()
+	pgxMock.ExpectQueryRow(insertUserSQL).
+		WithArgs("alice@example.com").
+		WillReturnRow(mock.NewRow(1, "alice@example.com"))
+	pgxMock.ExpectCommit()
+
+	var user User
+	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+		var err error
+		user, err = octobe.Execute(session, CreateUser("alice@example.com"))
+		return err
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, User{ID: 1, Email: "alice@example.com"}, user)
+	require.NoError(t, pgxMock.AllExpectationsMet())
 }
 ```
-
-**After (Octobe):**
-
-```go
-func UpdateUser(id int, name string) octobe.Handler[octobe.Void, postgres.Builder] {
-    return func(builder postgres.Builder) (octobe.Void, error) {
-        query := builder(`UPDATE users SET name = $1 WHERE id = $2`)
-        _, err := query.Arguments(name, id).Exec()
-        return nil, err
-    }
-}
-```
-
-### How does Octobe handle connection pooling?
-
-Octobe uses the underlying driver's connection pooling (like pgxpool). Non-transactional `Begin` sessions acquire one pool connection and keep it until `session.Close()`, so always close manually-created sessions. Configure your pool settings when creating the driver:
-
-```go
-config, _ := pgxpool.ParseConfig(dsn)
-config.MaxConns = 50
-pool, _ := pgxpool.NewWithConfig(ctx, config)
-db, _ := octobe.New(postgres.OpenPGXWithPool(pool))
-```
-
-## Installation & Drivers
-
-```bash
-# Core package
-go get github.com/Kansuler/octobe/v3
-
-# Database drivers
-go get github.com/Kansuler/octobe/v3/driver/postgres
-```
-
-### Available Drivers
-
-- **PostgreSQL**: Full-featured driver using pgx/v5
-- **SQLite**: _Coming soon_
-- **Clickhouse**: _Coming soon_
-
-Want to add a driver? Check our [Driver Development Guide](CONTRIBUTING.md#driver-development).
 
 ## Examples
 
-Check out the [examples directory](examples/) for complete, runnable examples:
+- [Simple CRUD](examples/simple/) shows table setup, create/read/update/delete, and listing rows.
+- [Blog application](examples/blog/) shows a larger schema with users, posts, comments, tags, and multi-step transactions.
 
-- **[Simple CRUD](examples/simple/)**: Basic operations to get started
-- **[Blog Application](examples/blog/)**: Complex real-world example with relationships
+Run the full test suite with PostgreSQL:
 
-## Contributing
+```bash
+docker compose up --abort-on-container-exit
+```
 
-We welcome contributions! Here's how to get started:
+## Driver development
 
-### Quick Start for Contributors
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests: `docker compose up --abort-on-container-exit`
-4. Commit your changes (`git commit -m 'Add amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
-
-### Driver Development
-
-Creating a new database driver? Follow these steps:
-
-1. Implement the core interfaces in `driver/yourdb/`
-2. Add comprehensive tests
-3. Create mock implementations for testing
-4. Add examples and documentation
-5. Submit a PR with benchmarks
-
-See the [PostgreSQL driver](driver/postgres/) as a reference implementation.
+Drivers implement the Octobe `Driver`, `Session`, and builder contracts. Use the PostgreSQL driver in [`driver/postgres`](driver/postgres/) as the reference implementation.
 
 ## License
 
-MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE).
