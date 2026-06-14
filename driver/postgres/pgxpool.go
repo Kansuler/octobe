@@ -10,22 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PGXPool defines the essential pgxpool interface.
+// PGXPool defines the pgxpool methods used by the driver.
 type PGXPool interface {
 	Close()
 	Acquire(ctx context.Context) (c *pgxpool.Conn, err error)
-	AcquireFunc(ctx context.Context, f func(*pgxpool.Conn) error) error
-	AcquireAllIdle(ctx context.Context) []*pgxpool.Conn
-	Reset()
-	Config() *pgxpool.Config
-	Stat() *pgxpool.Stat
-	Begin(context.Context) (pgx.Tx, error)
 	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
-	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
-	Query(context.Context, string, ...any) (pgx.Rows, error)
-	QueryRow(context.Context, string, ...any) pgx.Row
-	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
-	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
 	Ping(ctx context.Context) error
 }
 
@@ -73,11 +62,15 @@ var (
 	_ PGXPoolSessionConn = &pgxpoolAcquiredConn{}
 )
 
-// OpenPGXPool creates a connection pool driver from a DSN.
-func OpenPGXPool(ctx context.Context, dsn string) octobe.Open[pgxpoolConn, pgxConfig, Builder] {
-	return func() (octobe.Driver[pgxpoolConn, pgxConfig, Builder], error) {
+// OpenPGXPool creates a connection pool driver from a DSN and verifies connectivity.
+func OpenPGXPool(ctx context.Context, dsn string) PGXPoolOpen {
+	return func() (PGXPoolDriver, error) {
 		pool, err := pgxpool.New(ctx, dsn)
 		if err != nil {
+			return nil, err
+		}
+		if err := pool.Ping(ctx); err != nil {
+			pool.Close()
 			return nil, err
 		}
 
@@ -88,8 +81,8 @@ func OpenPGXPool(ctx context.Context, dsn string) octobe.Open[pgxpoolConn, pgxCo
 }
 
 // OpenPGXWithPool creates a driver from an existing pool.
-func OpenPGXWithPool(pool PGXPool) octobe.Open[pgxpoolConn, pgxConfig, Builder] {
-	return func() (octobe.Driver[pgxpoolConn, pgxConfig, Builder], error) {
+func OpenPGXWithPool(pool PGXPool) PGXPoolOpen {
+	return func() (PGXPoolDriver, error) {
 		if pool == nil {
 			return nil, errors.New("pool is nil")
 		}
@@ -141,8 +134,8 @@ func (d *pgxpoolConn) acquireSession(ctx context.Context) (PGXPoolSessionConn, e
 }
 
 // BeginTx starts a new transactional session.
-func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
-	var cfg pgxConfig
+func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Session[Builder], error) {
+	var cfg Config
 	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
 	}
@@ -189,14 +182,14 @@ func (d *pgxpoolConn) Ping(ctx context.Context) error {
 }
 
 // StartTransaction starts a new transactional session.
-func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...octobe.Option[pgxConfig]) (err error) {
-	return octobe.StartTransaction[pgxpoolConn, pgxConfig, Builder](ctx, d, fn, opts...)
+func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...Option) (err error) {
+	return octobe.StartTransaction[PGXPool](ctx, d, fn, opts...)
 }
 
 // pgxpoolSession manages a pooled database session.
 type pgxpoolSession struct {
 	ctx       context.Context
-	cfg       pgxConfig
+	cfg       Config
 	tx        pgx.Tx
 	conn      PGXPoolSessionConn
 	committed bool

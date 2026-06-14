@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// PGXConn defines the essential pgx connection interface for database operations.
+// PGXConn defines the pgx connection methods used by the driver.
 type PGXConn interface {
 	Close(context.Context) error
 	Prepare(context.Context, string, string) (*pgconn.StatementDescription, error)
@@ -36,8 +36,8 @@ type pgxConn struct {
 var _ PGXDriver = &pgxConn{}
 
 // OpenPGX creates a pgx connection driver from a DSN string.
-func OpenPGX(ctx context.Context, dsn string) octobe.Open[pgxConn, pgxConfig, Builder] {
-	return func() (octobe.Driver[pgxConn, pgxConfig, Builder], error) {
+func OpenPGX(ctx context.Context, dsn string) PGXOpen {
+	return func() (PGXDriver, error) {
 		conn, err := pgx.Connect(ctx, dsn)
 		if err != nil {
 			return nil, err
@@ -55,8 +55,8 @@ type ParseConfigOptions struct {
 }
 
 // OpenPGXWithOptions creates a pgx connection driver with custom parse options.
-func OpenPGXWithOptions(ctx context.Context, dsn string, options ParseConfigOptions) octobe.Open[pgxConn, pgxConfig, Builder] {
-	return func() (octobe.Driver[pgxConn, pgxConfig, Builder], error) {
+func OpenPGXWithOptions(ctx context.Context, dsn string, options ParseConfigOptions) PGXOpen {
+	return func() (PGXDriver, error) {
 		conn, err := pgx.ConnectWithOptions(ctx, dsn, pgx.ParseConfigOptions{ParseConfigOptions: options.ParseConfigOptions})
 		if err != nil {
 			return nil, err
@@ -69,8 +69,8 @@ func OpenPGXWithOptions(ctx context.Context, dsn string, options ParseConfigOpti
 }
 
 // OpenPGXWithConn creates a driver from an existing pgx connection.
-func OpenPGXWithConn(c PGXConn) octobe.Open[pgxConn, pgxConfig, Builder] {
-	return func() (octobe.Driver[pgxConn, pgxConfig, Builder], error) {
+func OpenPGXWithConn(c PGXConn) PGXOpen {
+	return func() (PGXDriver, error) {
 		if c == nil {
 			return nil, errors.New("conn is nil")
 		}
@@ -91,8 +91,8 @@ func (d *pgxConn) Begin(ctx context.Context) (octobe.Session[Builder], error) {
 }
 
 // BeginTx starts a new transactional session.
-func (d *pgxConn) BeginTx(ctx context.Context, opts ...octobe.Option[pgxConfig]) (octobe.Session[Builder], error) {
-	var cfg pgxConfig
+func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Session[Builder], error) {
+	var cfg Config
 	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
 	}
@@ -138,15 +138,15 @@ func (d *pgxConn) Ping(ctx context.Context) error {
 }
 
 // StartTransaction starts a transactional session.
-func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...octobe.Option[pgxConfig]) (err error) {
-	return octobe.StartTransaction[pgxConn, pgxConfig, Builder](ctx, d, fn, opts...)
+func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...Option) (err error) {
+	return octobe.StartTransaction[PGXConn](ctx, d, fn, opts...)
 }
 
 // pgxSession manages a database session that may be transactional or non-transactional.
 // Not thread-safe - use one session per goroutine.
 type pgxSession struct {
 	ctx       context.Context
-	cfg       pgxConfig
+	cfg       Config
 	tx        pgx.Tx
 	d         *pgxConn
 	committed bool

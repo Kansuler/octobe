@@ -15,9 +15,9 @@ func TestPGXWithTxInsideStartTransaction(t *testing.T) {
 	m := mock.NewPGXMock()
 	m.ExpectBeginTx()
 	name := "Some name"
-	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").WillReturnResult(mock.NewResult("", 0))
-	m.ExpectQueryRow("INSERT INTO products").WithArgs(name).WillReturnRow(mock.NewRow(1, name))
-	m.ExpectQuery("SELECT id, name FROM products").WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
+	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
+	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
+	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectCommit()
 	m.ExpectClose()
 
@@ -63,9 +63,9 @@ func TestPGXWithTx(t *testing.T) {
 	name := "Some name"
 
 	m.ExpectBeginTx()
-	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").WillReturnResult(mock.NewResult("", 0))
-	m.ExpectQueryRow("INSERT INTO products").WithArgs(name).WillReturnRow(mock.NewRow(1, name))
-	m.ExpectQuery("SELECT id, name FROM products").WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
+	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
+	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
+	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectCommit()
 	m.ExpectClose()
 
@@ -118,9 +118,9 @@ func TestPGXWithoutTx(t *testing.T) {
 	m := mock.NewPGXMock()
 	name := "Some name"
 
-	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").WillReturnResult(mock.NewResult("", 0))
-	m.ExpectQueryRow("INSERT INTO products").WithArgs(name).WillReturnRow(mock.NewRow(1, name))
-	m.ExpectQuery("SELECT id, name FROM products").WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
+	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
+	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
+	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectClose()
 
 	ob, err := octobe.New(postgres.OpenPGXWithConn(m))
@@ -221,7 +221,7 @@ func ProductsByName(name string) octobe.Handler[[]Product, postgres.Builder] {
 func TestPGXWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 	m := mock.NewPGXMock()
 	m.ExpectBeginTx()
-	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").WillReturnResult(mock.NewResult("", 0))
+	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
 	m.ExpectRollback()
 	m.ExpectClose()
 
@@ -251,7 +251,7 @@ func TestPGXWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 func TestPGXWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 	m := mock.NewPGXMock()
 	m.ExpectBeginTx()
-	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").WillReturnResult(mock.NewResult("", 0))
+	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
 	m.ExpectRollback()
 	m.ExpectClose()
 
@@ -285,8 +285,8 @@ func TestPGXWithTxManualRollback(t *testing.T) {
 	name := "Some name"
 
 	m.ExpectBeginTx()
-	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").WillReturnResult(mock.NewResult("", 0))
-	m.ExpectQueryRow("INSERT INTO products").WithArgs(name).WillReturnRow(mock.NewRow(1, name))
+	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
+	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
 	m.ExpectRollback()
 	m.ExpectClose()
 

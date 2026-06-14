@@ -6,8 +6,20 @@ import (
 )
 
 type (
-	PGXDriver     octobe.Driver[pgxConn, pgxConfig, Builder]
-	PGXPoolDriver octobe.Driver[pgxpoolConn, pgxConfig, Builder]
+	// PGXDriver is the driver interface returned by OpenPGX, OpenPGXWithOptions, and OpenPGXWithConn.
+	PGXDriver = octobe.Driver[PGXConn, Config, Builder]
+
+	// PGXPoolDriver is the driver interface returned by OpenPGXPool and OpenPGXWithPool.
+	PGXPoolDriver = octobe.Driver[PGXPool, Config, Builder]
+
+	// PGXOpen opens a single-connection PostgreSQL driver.
+	PGXOpen = octobe.Open[PGXConn, Config, Builder]
+
+	// PGXPoolOpen opens a pooled PostgreSQL driver.
+	PGXPoolOpen = octobe.Open[PGXPool, Config, Builder]
+
+	// Option configures PostgreSQL driver behavior.
+	Option = octobe.Option[Config]
 )
 
 // Builder constructs executable query segments from SQL strings.
@@ -16,22 +28,23 @@ type Builder func(query string) Segment
 // PGXTxOptions configures transaction behavior and isolation levels.
 type PGXTxOptions pgx.TxOptions
 
-type pgxConfig struct {
+// Config stores PostgreSQL driver options.
+type Config struct {
 	txOptions *PGXTxOptions
 }
 
 // WithPGXTxOptions configures transaction options for the session.
-func WithPGXTxOptions(options PGXTxOptions) octobe.Option[pgxConfig] {
-	return func(c *pgxConfig) {
+func WithPGXTxOptions(options PGXTxOptions) Option {
+	return func(c *Config) {
 		c.txOptions = &options
 	}
 }
 
 // transactionOptions applies transaction options to the given options slice, ensuring a non-nil txOptions field.
-func transactionOptions(opts []octobe.Option[pgxConfig]) []octobe.Option[pgxConfig] {
-	txOpts := make([]octobe.Option[pgxConfig], 0, len(opts)+1)
+func transactionOptions(opts []Option) []Option {
+	txOpts := make([]Option, 0, len(opts)+1)
 	txOpts = append(txOpts, opts...)
-	txOpts = append(txOpts, func(c *pgxConfig) {
+	txOpts = append(txOpts, func(c *Config) {
 		if c.txOptions == nil {
 			c.txOptions = &PGXTxOptions{}
 		}
