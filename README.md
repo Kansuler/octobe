@@ -39,7 +39,7 @@ func CreateUser(db *sql.DB, name string) (*User, error) {
 **With Octobe** - Clean, structured, automatic:
 
 ```go
-func CreateUser(name string) octobe.Handler[User] {
+func CreateUser(name string) octobe.Handler[User, postgres.Builder] {
     return func(builder postgres.Builder) (User, error) {
         var user User
         query := builder(`INSERT INTO users (name) VALUES ($1) RETURNING id, name`)
@@ -76,7 +76,7 @@ Use:
 
 ```go
 // 1. Create handlers (your SQL logic)
-func GetProduct(id int) octobe.Handler[Product] {
+func GetProduct(id int) octobe.Handler[Product, postgres.Builder] {
     return func(builder postgres.Builder) (Product, error) {
         var p Product
         query := builder(`SELECT id, name FROM products WHERE id = $1`)
@@ -111,8 +111,8 @@ import (
     "fmt"
     "os"
 
-    "github.com/Kansuler/octobe"
-    "github.com/Kansuler/octobe/driver/postgres"
+    "github.com/Kansuler/octobe/v3"
+    "github.com/Kansuler/octobe/v3/driver/postgres"
 )
 
 type Product struct {
@@ -121,7 +121,7 @@ type Product struct {
 }
 
 // Handlers are pure functions that encapsulate SQL logic
-func CreateProduct(name string) octobe.Handler[Product] {
+func CreateProduct(name string) octobe.Handler[Product, postgres.Builder] {
     return func(builder postgres.Builder) (Product, error) {
         var product Product
         query := builder(`INSERT INTO products (name) VALUES ($1) RETURNING id, name`)
@@ -130,7 +130,7 @@ func CreateProduct(name string) octobe.Handler[Product] {
     }
 }
 
-func GetProduct(id int) octobe.Handler[Product] {
+func GetProduct(id int) octobe.Handler[Product, postgres.Builder] {
     return func(builder postgres.Builder) (Product, error) {
         var product Product
         query := builder(`SELECT id, name FROM products WHERE id = $1`)
@@ -169,34 +169,27 @@ func main() {
         panic(err)
     }
 
-
-    // Or do it without a wrapper function, WithPGXTxOptions starts a transaction.
+    // Or manage the transaction manually.
     session, err := db.Begin(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
     if err != nil {
-      panic(err)
+        panic(err)
     }
-
-    defer session.Rollback() // Safe to call, will be a no-op if already committed
+    defer func() { _ = session.Rollback() }()
 
     product, err := octobe.Execute(session, CreateProduct("Another Widget"))
     if err != nil {
-      panic(err)
+        panic(err)
     }
 
-    // Create product
-    product, err := octobe.Execute(session, CreateProduct("Super Widget"))
-    if err != nil {
-      panic(err)
-    }
-
-    // Fetch it back
     fetched, err := octobe.Execute(session, GetProduct(product.ID))
     if err != nil {
-      return err
+        panic(err)
     }
 
     fmt.Printf("Created and fetched: %+v\n", fetched)
-    return session.Commit() // Explicit commit
+    if err := session.Commit(); err != nil {
+        panic(err)
+    }
 }
 ```
 
@@ -210,10 +203,10 @@ func TestCreateProduct(t *testing.T) {
 
     // 1. Create mock
     mockPool := mock.NewPGXPoolMock()
-    db, _ := octobe.New(postgres.OpenPGXPoolWithPool(mockPool))
+    db, _ := octobe.New(postgres.OpenPGXWithPool(mockPool))
 
     // 2. Set expectations
-    rows := mock.NewMockRow(1, "Super Widget")
+    rows := mock.NewRow(1, "Super Widget")
     mockPool.ExpectQueryRow("INSERT INTO products").WithArgs("Super Widget").WillReturnRow(rows)
 
     // 3. Test your handler
@@ -257,7 +250,7 @@ func GetUser(db *sql.DB, id int) (*User, error) {
 **After (Octobe):**
 
 ```go
-func GetUser(id int) octobe.Handler[User] {
+func GetUser(id int) octobe.Handler[User, postgres.Builder] {
     return func(builder postgres.Builder) (User, error) {
         var user User
         err := builder(`SELECT id, name FROM users WHERE id = $1`).
@@ -274,7 +267,7 @@ var user User
 err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
     user, err := octobe.Execute(session, GetUser(123))
     return err
-})
+}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 ```
 
 ### From GORM
@@ -309,7 +302,7 @@ type UserWithPosts struct {
 	Posts []Post
 }
 
-func PostsByUserID(userID int) octobe.Handler[UserWithPosts] {
+func PostsByUserID(userID int) octobe.Handler[UserWithPosts, postgres.Builder] {
 	return func(builder postgres.Builder) (UserWithPosts, error) {
 		var result UserWithPosts
 		query := builder(`
@@ -329,7 +322,7 @@ func PostsByUserID(userID int) octobe.Handler[UserWithPosts] {
 				}
 				result.Posts = append(result.Posts, post)
 			}
-			return nil
+			return rows.Err()
 		})
 		return result, err
 	}
@@ -360,7 +353,7 @@ func UpdateUser(db *sql.DB, id int, name string) error {
 **After (Octobe):**
 
 ```go
-func UpdateUser(id int, name string) octobe.Handler[octobe.Void] {
+func UpdateUser(id int, name string) octobe.Handler[octobe.Void, postgres.Builder] {
     return func(builder postgres.Builder) (octobe.Void, error) {
         query := builder(`UPDATE users SET name = $1 WHERE id = $2`)
         _, err := query.Arguments(name, id).Exec()
