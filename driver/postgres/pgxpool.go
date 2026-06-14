@@ -247,5 +247,9 @@ func (s *pgxpoolSegment) Query(cb func(Rows) error) error {
 		return err
 	}
 
+	if err = rows.Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
