@@ -305,15 +305,16 @@ type UserWithPosts struct {
 func PostsByUserID(userID int) octobe.Handler[UserWithPosts, postgres.Builder] {
 	return func(builder postgres.Builder) (UserWithPosts, error) {
 		var result UserWithPosts
-		query := builder(`
+		err := builder(`
 			SELECT
 				u.id, u.name,
 				p.id, p.title, p.content
 			FROM users u
 			LEFT JOIN posts p ON p.user_id = u.id
 			WHERE u.id = $1
-		`)
-		err := query.Arguments(userID).Query(func(rows postgres.Rows) error {
+		`).
+		Arguments(userID).
+		Query(func(rows postgres.Rows) error {
 			for rows.Next() {
 				var post Post
 				err := rows.Scan(&result.User.ID, &result.User.Name, &post.ID, &post.Title, &post.Content)
@@ -322,8 +323,9 @@ func PostsByUserID(userID int) octobe.Handler[UserWithPosts, postgres.Builder] {
 				}
 				result.Posts = append(result.Posts, post)
 			}
-			return rows.Err()
+			return nil
 		})
+		
 		return result, err
 	}
 }
