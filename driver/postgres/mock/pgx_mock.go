@@ -19,7 +19,6 @@ var ErrNoExpectation = errors.New("no expectation found")
 type PGXMock struct {
 	mu           sync.Mutex
 	expectations []expectation
-	ordered      bool
 }
 
 var (

@@ -17,7 +17,6 @@ import (
 type PGXPoolMock struct {
 	mu           sync.Mutex
 	expectations []expectation
-	ordered      bool
 }
 
 var (
@@ -92,7 +91,6 @@ func (m *PGXPoolMock) Close() {
 	if len(ret) > 0 && ret[0] != nil {
 		return
 	}
-	return
 }
 
 // ExpectExec configures an expectation for an Exec operation with the specified query.

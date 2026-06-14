@@ -118,7 +118,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		if err := db.Close(ctx); err != nil {
+			log.Fatalf("Failed to close database: %v", err)
+		}
+	}()
 
 	// Step 2: Test connection
 	if err := db.Ping(ctx); err != nil {
