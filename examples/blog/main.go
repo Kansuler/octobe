@@ -408,10 +408,10 @@ func (s *BlogService) GetPostWithComments(ctx context.Context, postID int) (*Pos
 
 func main() {
 	// Get database URL from environment
-	dsn := os.Getenv("DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgresql://user:password@localhost:5432/blogdb?sslmode=disable"
-		log.Printf("Using default DSN: %s", dsn)
+		log.Printf("Using default database URL: %s", dsn)
 		log.Println("Set DATABASE_URL environment variable to use a different database")
 	}
 

@@ -105,10 +105,10 @@ func ListUsers() octobe.Handler[[]User, postgres.Builder] {
 
 func main() {
 	// Get database URL from environment or use default
-	dsn := os.Getenv("DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgresql://user:password@localhost:5432/testdb?sslmode=disable"
-		log.Printf("Using default DSN. Set DATABASE_URL environment variable to use different database.")
+		log.Printf("Using default database URL. Set DATABASE_URL environment variable to use different database.")
 	}
 
 	ctx := context.Background()
