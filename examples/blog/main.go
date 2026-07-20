@@ -46,8 +46,8 @@ type Tag struct {
 }
 
 // Database schema creation
-func CreateSchema() octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func CreateSchema() octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		schema := `
 		CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
@@ -86,7 +86,7 @@ func CreateSchema() octobe.Handler[octobe.Void, postgres.Builder] {
 
 		query := builder(schema)
 		_, err := query.Exec()
-		return nil, err
+		return err
 	}
 }
 
@@ -215,11 +215,11 @@ func UpdatePost(postID int, title, content string) octobe.Handler[Post, postgres
 	}
 }
 
-func DeletePost(postID int) octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func DeletePost(postID int) octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		query := builder(`DELETE FROM posts WHERE id = $1`)
 		_, err := query.Arguments(postID).Exec()
-		return nil, err
+		return err
 	}
 }
 
@@ -278,15 +278,15 @@ func CreateTag(name string) octobe.Handler[Tag, postgres.Builder] {
 	}
 }
 
-func AddTagToPost(postID, tagID int) octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func AddTagToPost(postID, tagID int) octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		query := builder(`
 			INSERT INTO post_tags (post_id, tag_id)
 			VALUES ($1, $2)
 			ON CONFLICT (post_id, tag_id) DO NOTHING`)
 
 		_, err := query.Arguments(postID, tagID).Exec()
-		return nil, err
+		return err
 	}
 }
 

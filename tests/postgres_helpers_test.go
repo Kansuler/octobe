@@ -84,29 +84,29 @@ func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) postgre
 	}
 }
 
-func migrateProducts(table string) octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func migrateProducts(table string) octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		_, err := builder(fmt.Sprintf(`
 			CREATE TABLE IF NOT EXISTS %s (
 				id SERIAL PRIMARY KEY,
 				name TEXT NOT NULL
 			);
 		`, quoteIdentifier(table))).Exec()
-		return nil, err
+		return err
 	}
 }
 
-func truncateProducts(table string) octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func truncateProducts(table string) octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		_, err := builder(fmt.Sprintf(`TRUNCATE TABLE %s RESTART IDENTITY`, quoteIdentifier(table))).Exec()
-		return nil, err
+		return err
 	}
 }
 
-func dropProducts(table string) octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func dropProducts(table string) octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		_, err := builder(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quoteIdentifier(table))).Exec()
-		return nil, err
+		return err
 	}
 }
 

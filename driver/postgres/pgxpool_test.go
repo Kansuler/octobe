@@ -30,7 +30,7 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 	}
 
 	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		_, err := octobe.Execute(session, Migration())
+		err := octobe.ExecuteVoid(session, Migration())
 		if !assert.NoError(t, err) {
 			return err
 		}
@@ -95,7 +95,7 @@ func TestPGXPoolWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	_, err = octobe.Execute(session, Migration())
+	err = octobe.ExecuteVoid(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -157,7 +157,7 @@ func TestPGXPoolWithoutTx(t *testing.T) {
 	}
 	defer func() { assert.NoError(t, session.Close()) }()
 
-	_, err = octobe.Execute(session, Migration())
+	err = octobe.ExecuteVoid(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -233,7 +233,7 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 	}
 
 	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		_, err := octobe.Execute(session, Migration())
+		err := octobe.ExecuteVoid(session, Migration())
 		return err
 	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 
@@ -259,7 +259,7 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 
 	assert.Panics(t, func() {
 		_ = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			_, err := octobe.Execute(session, Migration())
+			err := octobe.ExecuteVoid(session, Migration())
 			if err != nil {
 				return err
 			}
@@ -292,7 +292,7 @@ func TestPGXPoolWithTxManualRollback(t *testing.T) {
 		t.FailNow()
 	}
 
-	_, err = octobe.Execute(session, Migration())
+	err = octobe.ExecuteVoid(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -333,7 +333,7 @@ func TestPGXPoolWithoutTxCommit(t *testing.T) {
 	}
 	defer func() { assert.NoError(t, session.Close()) }()
 
-	_, err = octobe.Execute(session, Migration())
+	err = octobe.ExecuteVoid(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -361,7 +361,7 @@ func TestPGXPoolWithoutTxRollback(t *testing.T) {
 	}
 	defer func() { assert.NoError(t, session.Close()) }()
 
-	_, err = octobe.Execute(session, Migration())
+	err = octobe.ExecuteVoid(session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}

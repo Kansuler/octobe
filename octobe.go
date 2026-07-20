@@ -128,20 +128,6 @@ type BuilderSession[BUILDER any] interface {
 	Builder() BUILDER
 }
 
-// Void represents an empty return type for handlers that perform actions without returning data.
-// Use this for operations like INSERT, UPDATE, DELETE that only need to report success/failure.
-//
-// Example:
-//
-//	func DeleteUser(id int) octobe.Handler[octobe.Void, postgres.Builder] {
-//	    return func(builder postgres.Builder) (octobe.Void, error) {
-//	        query := builder(`DELETE FROM users WHERE id = $1`)
-//	        _, err := query.Arguments(id).Exec()
-//	        return nil, err
-//	    }
-//	}
-type Void *struct{}
-
 // StartTransaction executes fn within a database transaction, automatically handling commit/rollback.
 //
 // This is the recommended way to perform database operations as it:
@@ -209,6 +195,19 @@ func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver D
 //	}
 type Handler[RESULT, BUILDER any] func(BUILDER) (RESULT, error)
 
+// VoidHandler is like Handler but returns an error only. Ignores any result value.
+//
+// Example:
+//
+//	func GetUser(id int, name string) octobe.VoidHandler[postgres.Builder] {
+//	    return func(builder postgres.Builder) error {
+//	        query := builder(`UPDATE SET name = $2 FROM users WHERE id = $1`)
+//	        err := query.Arguments(id, name).Exec()
+//	        return err
+//	    }
+//	}
+type VoidHandler[BUILDER any] func(BUILDER) error
+
 // Execute runs a handler function with the session's query builder.
 func Execute[RESULT, BUILDER any](session BuilderSession[BUILDER], f Handler[RESULT, BUILDER]) (RESULT, error) {
 	return f(session.Builder())
@@ -223,9 +222,8 @@ func Execute[RESULT, BUILDER any](session BuilderSession[BUILDER], f Handler[RES
 //	if err != nil {
 //	    return fmt.Errorf("failed to delete user: %w", err)
 //	}
-func ExecuteVoid[BUILDER any](session BuilderSession[BUILDER], f Handler[Void, BUILDER]) error {
-	_, err := f(session.Builder())
-	return err
+func ExecuteVoid[BUILDER any](session BuilderSession[BUILDER], f VoidHandler[BUILDER]) error {
+	return f(session.Builder())
 }
 
 // ExecuteMany runs multiple handlers in sequence within the same session.

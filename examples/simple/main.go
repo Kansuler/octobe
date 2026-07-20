@@ -20,8 +20,8 @@ type User struct {
 }
 
 // Create table handler
-func CreateUsersTable() octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func CreateUsersTable() octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		query := builder(`
 			CREATE TABLE IF NOT EXISTS users (
 				id SERIAL PRIMARY KEY,
@@ -29,7 +29,7 @@ func CreateUsersTable() octobe.Handler[octobe.Void, postgres.Builder] {
 				email VARCHAR(100) UNIQUE NOT NULL
 			)`)
 		_, err := query.Exec()
-		return nil, err
+		return err
 	}
 }
 
@@ -74,11 +74,11 @@ func UpdateUser(id int, name, email string) octobe.Handler[User, postgres.Builde
 }
 
 // Delete user handler
-func DeleteUser(id int) octobe.Handler[octobe.Void, postgres.Builder] {
-	return func(builder postgres.Builder) (octobe.Void, error) {
+func DeleteUser(id int) octobe.VoidHandler[postgres.Builder] {
+	return func(builder postgres.Builder) error {
 		query := builder(`DELETE FROM users WHERE id = $1`)
 		_, err := query.Arguments(id).Exec()
-		return nil, err
+		return err
 	}
 }
 
