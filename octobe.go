@@ -14,7 +14,7 @@
 //	}
 //
 //	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-//	    user, err := octobe.Execute(session, CreateUser("Alice"))
+//	    user, err := octobe.Execute(ctx, session, CreateUser("Alice"))
 //	    return err // Automatic rollback on error, commit on success
 //	})
 package octobe
@@ -96,23 +96,23 @@ func New[DRIVER any, CONFIG any, BUILDER any](init Open[DRIVER, CONFIG, BUILDER]
 // Session represents an active database session that may or may not be transactional.
 //
 // Transactional sessions (created with transaction options) maintain ACID properties
-// and must call Commit() to persist changes or Rollback() or Close() to discard them.
+// and must call Commit(ctx) to persist changes or Rollback(ctx) or Close(ctx) to discard them.
 // Non-transactional sessions execute queries immediately without transaction boundaries
-// and must call Close() to release session resources.
+// and must call Close(ctx) to release session resources.
 //
 // Sessions embed BuilderSession to provide direct access to query construction methods.
 type Session[BUILDER any] interface {
 	// Commit persists all changes made within the transaction.
 	// Only valid for transactional sessions.
-	Commit() error
+	Commit(ctx context.Context) error
 
 	// Rollback discards all changes made within the transaction.
 	// Only valid for transactional sessions.
-	Rollback() error
+	Rollback(ctx context.Context) error
 
 	// Close releases session resources. For uncommitted transactional sessions,
 	// Close rolls back the transaction. Close is idempotent.
-	Close() error
+	Close(ctx context.Context) error
 
 	BuilderSession[BUILDER]
 }
@@ -143,12 +143,12 @@ type BuilderSession[BUILDER any] interface {
 // Example:
 //
 //	err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-//	    user, err := octobe.Execute(session, CreateUser("Alice"))
+//	    user, err := octobe.Execute(ctx, session, CreateUser("Alice"))
 //	    if err != nil {
 //	        return err // Automatic rollback
 //	    }
 //
-//	    _, err = octobe.Execute(session, CreateProfile(user.ID))
+//	    _, err = octobe.Execute(ctx, session, CreateProfile(user.ID))
 //	    return err // Automatic commit if nil, rollback if error
 //	})
 func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver Driver[DRIVER, CONFIG, BUILDER], fn func(session BuilderSession[BUILDER]) error, opts ...Option[CONFIG]) (err error) {
@@ -159,10 +159,10 @@ func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver D
 
 	defer func() {
 		if p := recover(); p != nil {
-			_ = session.Rollback()
+			_ = session.Rollback(ctx)
 			panic(p)
 		} else if err != nil {
-			_ = session.Rollback()
+			_ = session.Rollback(ctx)
 		}
 	}()
 
@@ -171,11 +171,12 @@ func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver D
 		return err
 	}
 
-	return session.Commit()
+	return session.Commit(ctx)
 }
 
 // Handler processes database operations and returns typed results.
-// Handlers encapsulate SQL logic and can be easily tested by mocking the Builder.
+// Handlers receive the operation context explicitly and encapsulate SQL logic that can be
+// easily tested by mocking the Builder.
 //
 // The Handler pattern provides several benefits:
 // - Composable: handlers can be combined and reused
@@ -186,31 +187,31 @@ func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver D
 // Example:
 //
 //	func GetUser(id int) octobe.Handler[User, postgres.Builder] {
-//	    return func(builder postgres.Builder) (User, error) {
+//	    return func(ctx context.Context, builder postgres.Builder) (User, error) {
 //	        var user User
 //	        query := builder(`SELECT id, name, email FROM users WHERE id = $1`)
-//	        err := query.Arguments(id).QueryRow(&user.ID, &user.Name, &user.Email)
+//	        err := query.Arguments(id).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 //	        return user, err
 //	    }
 //	}
-type Handler[RESULT, BUILDER any] func(BUILDER) (RESULT, error)
+type Handler[RESULT, BUILDER any] func(context.Context, BUILDER) (RESULT, error)
 
 // VoidHandler is like Handler but returns an error only. Ignores any result value.
 //
 // Example:
 //
 //	func GetUser(id int, name string) octobe.VoidHandler[postgres.Builder] {
-//	    return func(builder postgres.Builder) error {
+//	    return func(ctx context.Context, builder postgres.Builder) error {
 //	        query := builder(`UPDATE SET name = $2 FROM users WHERE id = $1`)
-//	        err := query.Arguments(id, name).Exec()
+//	        _, err := query.Arguments(id, name).Exec(ctx)
 //	        return err
 //	    }
 //	}
-type VoidHandler[BUILDER any] func(BUILDER) error
+type VoidHandler[BUILDER any] func(context.Context, BUILDER) error
 
 // Execute runs a handler function with the session's query builder.
-func Execute[RESULT, BUILDER any](session BuilderSession[BUILDER], f Handler[RESULT, BUILDER]) (RESULT, error) {
-	return f(session.Builder())
+func Execute[RESULT, BUILDER any](ctx context.Context, session BuilderSession[BUILDER], f Handler[RESULT, BUILDER]) (RESULT, error) {
+	return f(ctx, session.Builder())
 }
 
 // ExecuteVoid runs a void handler (one that returns octobe.Void) and returns only the error.
@@ -218,12 +219,12 @@ func Execute[RESULT, BUILDER any](session BuilderSession[BUILDER], f Handler[RES
 //
 // Example:
 //
-//	err := octobe.ExecuteVoid(session, DeleteUser(123))
+//	err := octobe.ExecuteVoid(ctx, session, DeleteUser(123))
 //	if err != nil {
 //	    return fmt.Errorf("failed to delete user: %w", err)
 //	}
-func ExecuteVoid[BUILDER any](session BuilderSession[BUILDER], f VoidHandler[BUILDER]) error {
-	return f(session.Builder())
+func ExecuteVoid[BUILDER any](ctx context.Context, session BuilderSession[BUILDER], f VoidHandler[BUILDER]) error {
+	return f(ctx, session.Builder())
 }
 
 // ExecuteMany runs multiple handlers in sequence within the same session.
@@ -232,15 +233,15 @@ func ExecuteVoid[BUILDER any](session BuilderSession[BUILDER], f VoidHandler[BUI
 //
 // Example:
 //
-//	results, err := octobe.ExecuteMany(session,
+//	results, err := octobe.ExecuteMany(ctx, session,
 //	    CreateUser("Alice"),
 //	    CreateUser("Bob"),
 //	    CreateUser("Charlie"),
 //	)
-func ExecuteMany[RESULT, BUILDER any](session BuilderSession[BUILDER], handlers ...Handler[RESULT, BUILDER]) ([]RESULT, error) {
+func ExecuteMany[RESULT, BUILDER any](ctx context.Context, session BuilderSession[BUILDER], handlers ...Handler[RESULT, BUILDER]) ([]RESULT, error) {
 	results := make([]RESULT, 0, len(handlers))
 	for i, handler := range handlers {
-		result, err := handler(session.Builder())
+		result, err := handler(ctx, session.Builder())
 		if err != nil {
 			return nil, fmt.Errorf("handler %d failed: %w", i, err)
 		}

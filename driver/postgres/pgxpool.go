@@ -102,7 +102,6 @@ func (d *pgxpoolConn) Begin(ctx context.Context) (octobe.Session[Builder], error
 	}
 
 	return &pgxpoolSession{
-		ctx:  ctx,
 		conn: conn,
 	}, nil
 }
@@ -156,7 +155,6 @@ func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Sessi
 	}
 
 	return &pgxSession{
-		ctx:       ctx,
 		cfg:       cfg,
 		tx:        tx,
 		committed: false,
@@ -188,7 +186,6 @@ func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session octo
 
 // pgxpoolSession manages a pooled database session.
 type pgxpoolSession struct {
-	ctx       context.Context
 	cfg       Config
 	tx        pgx.Tx
 	conn      PGXPoolSessionConn
@@ -199,7 +196,7 @@ type pgxpoolSession struct {
 var _ octobe.Session[Builder] = &pgxpoolSession{}
 
 // Commit commits the transaction.
-func (s *pgxpoolSession) Commit() error {
+func (s *pgxpoolSession) Commit(ctx context.Context) error {
 	if s.committed {
 		return errors.New("cannot commit a session that has already been committed")
 	}
@@ -209,7 +206,7 @@ func (s *pgxpoolSession) Commit() error {
 	if s.closed {
 		return errors.New("cannot commit a session that has already been closed")
 	}
-	err := s.tx.Commit(s.ctx)
+	err := s.tx.Commit(ctx)
 	s.committed = true
 	if err == nil {
 		s.closed = true
@@ -218,7 +215,7 @@ func (s *pgxpoolSession) Commit() error {
 }
 
 // Rollback rolls back the transaction.
-func (s *pgxpoolSession) Rollback() error {
+func (s *pgxpoolSession) Rollback(ctx context.Context) error {
 	if s.tx == nil {
 		return errors.New("cannot rollback without transaction")
 	}
@@ -228,16 +225,16 @@ func (s *pgxpoolSession) Rollback() error {
 	defer func() {
 		s.closed = true
 	}()
-	return s.tx.Rollback(s.ctx)
+	return s.tx.Rollback(ctx)
 }
 
 // Close closes the session, rolling back if necessary.
-func (s *pgxpoolSession) Close() error {
+func (s *pgxpoolSession) Close(ctx context.Context) error {
 	if s.closed {
 		return nil
 	}
 	if s.tx != nil {
-		return s.Rollback()
+		return s.Rollback(ctx)
 	}
 	if s.conn != nil {
 		s.conn.Release()
@@ -288,7 +285,7 @@ func (s *pgxpoolSegment) Arguments(args ...any) Segment {
 }
 
 // Exec executes the query and returns affected rows.
-func (s *pgxpoolSegment) Exec() (ExecResult, error) {
+func (s *pgxpoolSegment) Exec(ctx context.Context) (ExecResult, error) {
 	if s.used {
 		return ExecResult{}, octobe.ErrAlreadyUsed
 	}
@@ -301,7 +298,7 @@ func (s *pgxpoolSegment) Exec() (ExecResult, error) {
 		if session.conn == nil {
 			return ExecResult{}, errors.New("pool session connection is nil")
 		}
-		res, err := session.conn.Exec(session.ctx, s.query, s.args...)
+		res, err := session.conn.Exec(ctx, s.query, s.args...)
 		if err != nil {
 			return ExecResult{}, err
 		}
@@ -311,7 +308,7 @@ func (s *pgxpoolSegment) Exec() (ExecResult, error) {
 		}, nil
 	}
 
-	res, err := session.tx.Exec(session.ctx, s.query, s.args...)
+	res, err := session.tx.Exec(ctx, s.query, s.args...)
 	if err != nil {
 		return ExecResult{}, err
 	}
@@ -321,7 +318,7 @@ func (s *pgxpoolSegment) Exec() (ExecResult, error) {
 }
 
 // QueryRow executes the query expecting one row and scans into dest.
-func (s *pgxpoolSegment) QueryRow(dest ...any) error {
+func (s *pgxpoolSegment) QueryRow(ctx context.Context, dest ...any) error {
 	if s.used {
 		return octobe.ErrAlreadyUsed
 	}
@@ -334,13 +331,13 @@ func (s *pgxpoolSegment) QueryRow(dest ...any) error {
 		if session.conn == nil {
 			return errors.New("pool session connection is nil")
 		}
-		return session.conn.QueryRow(session.ctx, s.query, s.args...).Scan(dest...)
+		return session.conn.QueryRow(ctx, s.query, s.args...).Scan(dest...)
 	}
-	return session.tx.QueryRow(session.ctx, s.query, s.args...).Scan(dest...)
+	return session.tx.QueryRow(ctx, s.query, s.args...).Scan(dest...)
 }
 
 // Query executes the query and calls cb for each row.
-func (s *pgxpoolSegment) Query(cb func(Rows) error) error {
+func (s *pgxpoolSegment) Query(ctx context.Context, cb func(Rows) error) error {
 	if s.used {
 		return octobe.ErrAlreadyUsed
 	}
@@ -356,12 +353,12 @@ func (s *pgxpoolSegment) Query(cb func(Rows) error) error {
 		if session.conn == nil {
 			return errors.New("pool session connection is nil")
 		}
-		rows, err = session.conn.Query(session.ctx, s.query, s.args...)
+		rows, err = session.conn.Query(ctx, s.query, s.args...)
 		if err != nil {
 			return err
 		}
 	} else {
-		rows, err = session.tx.Query(session.ctx, s.query, s.args...)
+		rows, err = session.tx.Query(ctx, s.query, s.args...)
 		if err != nil {
 			return err
 		}

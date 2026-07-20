@@ -85,64 +85,64 @@ func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) postgre
 }
 
 func migrateProducts(table string) octobe.VoidHandler[postgres.Builder] {
-	return func(builder postgres.Builder) error {
+	return func(ctx context.Context, builder postgres.Builder) error {
 		_, err := builder(fmt.Sprintf(`
 			CREATE TABLE IF NOT EXISTS %s (
 				id SERIAL PRIMARY KEY,
 				name TEXT NOT NULL
 			);
-		`, quoteIdentifier(table))).Exec()
+		`, quoteIdentifier(table))).Exec(ctx)
 		return err
 	}
 }
 
 func truncateProducts(table string) octobe.VoidHandler[postgres.Builder] {
-	return func(builder postgres.Builder) error {
-		_, err := builder(fmt.Sprintf(`TRUNCATE TABLE %s RESTART IDENTITY`, quoteIdentifier(table))).Exec()
+	return func(ctx context.Context, builder postgres.Builder) error {
+		_, err := builder(fmt.Sprintf(`TRUNCATE TABLE %s RESTART IDENTITY`, quoteIdentifier(table))).Exec(ctx)
 		return err
 	}
 }
 
 func dropProducts(table string) octobe.VoidHandler[postgres.Builder] {
-	return func(builder postgres.Builder) error {
-		_, err := builder(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quoteIdentifier(table))).Exec()
+	return func(ctx context.Context, builder postgres.Builder) error {
+		_, err := builder(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quoteIdentifier(table))).Exec(ctx)
 		return err
 	}
 }
 
 func createProduct(table, name string) octobe.Handler[integrationProduct, postgres.Builder] {
-	return func(builder postgres.Builder) (integrationProduct, error) {
+	return func(ctx context.Context, builder postgres.Builder) (integrationProduct, error) {
 		var product integrationProduct
 		err := builder(fmt.Sprintf(`
 			INSERT INTO %s (name)
 			VALUES ($1)
 			RETURNING id, name
-		`, quoteIdentifier(table))).Arguments(name).QueryRow(&product.ID, &product.Name)
+		`, quoteIdentifier(table))).Arguments(name).QueryRow(ctx, &product.ID, &product.Name)
 		return product, err
 	}
 }
 
 func productByID(table string, id int) octobe.Handler[integrationProduct, postgres.Builder] {
-	return func(builder postgres.Builder) (integrationProduct, error) {
+	return func(ctx context.Context, builder postgres.Builder) (integrationProduct, error) {
 		var product integrationProduct
 		err := builder(fmt.Sprintf(`
 			SELECT id, name
 			FROM %s
 			WHERE id = $1
-		`, quoteIdentifier(table))).Arguments(id).QueryRow(&product.ID, &product.Name)
+		`, quoteIdentifier(table))).Arguments(id).QueryRow(ctx, &product.ID, &product.Name)
 		return product, err
 	}
 }
 
 func productsByName(table, name string) octobe.Handler[[]integrationProduct, postgres.Builder] {
-	return func(builder postgres.Builder) ([]integrationProduct, error) {
+	return func(ctx context.Context, builder postgres.Builder) ([]integrationProduct, error) {
 		var products []integrationProduct
 		err := builder(fmt.Sprintf(`
 			SELECT id, name
 			FROM %s
 			WHERE name = $1
 			ORDER BY id
-		`, quoteIdentifier(table))).Arguments(name).Query(func(rows postgres.Rows) error {
+		`, quoteIdentifier(table))).Arguments(name).Query(ctx, func(rows postgres.Rows) error {
 			for rows.Next() {
 				var product integrationProduct
 				if err := rows.Scan(&product.ID, &product.Name); err != nil {
@@ -157,9 +157,9 @@ func productsByName(table, name string) octobe.Handler[[]integrationProduct, pos
 }
 
 func backendPID() octobe.Handler[int, postgres.Builder] {
-	return func(builder postgres.Builder) (int, error) {
+	return func(ctx context.Context, builder postgres.Builder) (int, error) {
 		var pid int
-		err := builder(`SELECT pg_backend_pid()`).QueryRow(&pid)
+		err := builder(`SELECT pg_backend_pid()`).QueryRow(ctx, &pid)
 		return pid, err
 	}
 }

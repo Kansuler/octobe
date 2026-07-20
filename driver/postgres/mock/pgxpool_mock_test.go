@@ -59,13 +59,13 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectAcquire()
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		defer func() { require.NoError(t, session.Close()) }()
+		defer func() { require.NoError(t, session.Close(ctx)) }()
 
 		query := "INSERT INTO events"
 		args := []any{1, "test"}
 		mock.ExpectExec(query).WithArgs(args...).WillReturnResult(pgconn.CommandTag{})
 
-		_, err = session.Builder()(query).Arguments(args...).Exec()
+		_, err = session.Builder()(query).Arguments(args...).Exec(ctx)
 		require.NoError(t, err)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
@@ -77,13 +77,13 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectAcquire()
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		defer func() { require.NoError(t, session.Close()) }()
+		defer func() { require.NoError(t, session.Close(ctx)) }()
 
 		query := "INSERT INTO events"
 		expectedErr := errors.New("exec error")
 		mock.ExpectExec(query).WillReturnError(expectedErr)
 
-		_, err = session.Builder()(query).Exec()
+		_, err = session.Builder()(query).Exec(ctx)
 		require.Error(t, err)
 		require.Equal(t, expectedErr, err)
 		require.NoError(t, mock.AllExpectationsMet())
@@ -96,7 +96,7 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectAcquire()
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		defer func() { require.NoError(t, session.Close()) }()
+		defer func() { require.NoError(t, session.Close(ctx)) }()
 
 		query := "SELECT id, name FROM users"
 		rows := NewRows([]string{"id", "name"}).
@@ -105,7 +105,7 @@ func TestPoolMock(t *testing.T) {
 
 		mock.ExpectQuery(query).WillReturnRows(rows)
 
-		err = session.Builder()(query).Query(func(r postgres.Rows) error {
+		err = session.Builder()(query).Query(ctx, func(r postgres.Rows) error {
 			i := 0
 			for r.Next() {
 				var id int
@@ -128,13 +128,13 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectAcquire()
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		defer func() { require.NoError(t, session.Close()) }()
+		defer func() { require.NoError(t, session.Close(ctx)) }()
 
 		query := "SELECT id, name FROM users"
 		expectedErr := errors.New("query error")
 		mock.ExpectQuery(query).WillReturnError(expectedErr)
 
-		err = session.Builder()(query).Query(func(r postgres.Rows) error {
+		err = session.Builder()(query).Query(ctx, func(r postgres.Rows) error {
 			return nil
 		})
 		require.Error(t, err)
@@ -149,14 +149,14 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectAcquire()
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		defer func() { require.NoError(t, session.Close()) }()
+		defer func() { require.NoError(t, session.Close(ctx)) }()
 
 		query := "SELECT name FROM users WHERE id = ?"
 		row := NewRow("John Doe")
 		mock.ExpectQueryRow(query).WithArgs(1).WillReturnRow(row)
 
 		var name string
-		err = session.Builder()(query).Arguments(1).QueryRow(&name)
+		err = session.Builder()(query).Arguments(1).QueryRow(ctx, &name)
 		require.NoError(t, err)
 		require.Equal(t, "John Doe", name)
 		require.NoError(t, mock.AllExpectationsMet())
@@ -169,7 +169,7 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectAcquire()
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		defer func() { require.NoError(t, session.Close()) }()
+		defer func() { require.NoError(t, session.Close(ctx)) }()
 
 		query := "SELECT name FROM users WHERE id = ?"
 		expectedErr := errors.New("row scan error")
@@ -177,7 +177,7 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectQueryRow(query).WithArgs(1).WillReturnRow(row)
 
 		var name string
-		err = session.Builder()(query).Arguments(1).QueryRow(&name)
+		err = session.Builder()(query).Arguments(1).QueryRow(ctx, &name)
 		require.Error(t, err)
 		require.Equal(t, expectedErr, err)
 		require.NoError(t, mock.AllExpectationsMet())
@@ -193,7 +193,7 @@ func TestPoolMock(t *testing.T) {
 
 		session, err := o.Begin(ctx)
 		require.NoError(t, err)
-		require.NoError(t, session.Close())
+		require.NoError(t, session.Close(ctx))
 		require.NoError(t, mock.AllExpectationsMet())
 	})
 
@@ -209,7 +209,7 @@ func TestPoolMock(t *testing.T) {
 		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
-		err = session.Commit()
+		err = session.Commit(ctx)
 		require.NoError(t, err)
 
 		require.NoError(t, mock.AllExpectationsMet())
@@ -229,10 +229,10 @@ func TestPoolMock(t *testing.T) {
 		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
-		_, err = session.Builder()(query).Arguments("test-user").Exec()
+		_, err = session.Builder()(query).Arguments("test-user").Exec(ctx)
 		require.NoError(t, err)
 
-		err = session.Commit()
+		err = session.Commit(ctx)
 		require.NoError(t, err)
 
 		require.NoError(t, mock.AllExpectationsMet())
@@ -250,7 +250,7 @@ func TestPoolMock(t *testing.T) {
 		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
-		err = session.Rollback()
+		err = session.Rollback(ctx)
 		require.NoError(t, err)
 
 		require.NoError(t, mock.AllExpectationsMet())

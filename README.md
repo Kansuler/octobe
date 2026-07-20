@@ -40,11 +40,11 @@ type User struct {
 const insertUserSQL = `INSERT INTO users (email) VALUES ($1) RETURNING id, email`
 
 func CreateUser(email string) octobe.Handler[User, postgres.Builder] {
-	return func(sql postgres.Builder) (User, error) {
+	return func(ctx context.Context, sql postgres.Builder) (User, error) {
 		var user User
 		err := sql(insertUserSQL).
 			Arguments(email).
-			QueryRow(&user.ID, &user.Email)
+			QueryRow(ctx, &user.ID, &user.Email)
 		return user, err
 	}
 }
@@ -59,7 +59,7 @@ func Signup(ctx context.Context, email string) (User, error) {
 	var user User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
 		var err error
-		user, err = octobe.Execute(session, CreateUser(email))
+		user, err = octobe.Execute(ctx, session, CreateUser(email))
 		return err
 	})
 	return user, err
@@ -74,7 +74,7 @@ Handlers keep SQL close to the result type:
 
 ```go
 func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
-	return func(sql postgres.Builder) ([]User, error) {
+	return func(ctx context.Context, sql postgres.Builder) ([]User, error) {
 		query := sql(`
 			SELECT id, email
 			FROM users
@@ -83,7 +83,7 @@ func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
 		`)
 
 		var users []User
-		err := query.Arguments("%@" + domain).Query(func(rows postgres.Rows) error {
+		err := query.Arguments("%@" + domain).Query(ctx, func(rows postgres.Rows) error {
 			for rows.Next() {
 				var user User
 				if err := rows.Scan(&user.ID, &user.Email); err != nil {
@@ -103,12 +103,12 @@ Compose several operations in the same transaction:
 
 ```go
 err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-	user, err := octobe.Execute(session, CreateUser("alice@example.com"))
+	user, err := octobe.Execute(ctx, session, CreateUser("alice@example.com"))
 	if err != nil {
 		return err
 	}
 
-	return octobe.ExecuteVoid(session, CreateAuditEvent(user.ID, "signup"))
+	return octobe.ExecuteVoid(ctx, session, CreateAuditEvent(user.ID, "signup"))
 })
 ```
 
@@ -119,9 +119,9 @@ session, err := db.Begin(ctx) // pgxpool: pins one pool connection until Close
 if err != nil {
 	return err
 }
-defer session.Close()
+defer session.Close(ctx)
 
-user, err := octobe.Execute(session, GetUser(123))
+user, err := octobe.Execute(ctx, session, GetUser(123))
 ```
 
 ## Why use Octobe instead of another package?
@@ -181,7 +181,7 @@ Set transaction options when needed:
 err := db.StartTransaction(
 	ctx,
 	func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(session, RebuildReport())
+		return octobe.ExecuteVoid(ctx, session, RebuildReport())
 	},
 	postgres.WithPGXTxOptions(postgres.PGXTxOptions{IsoLevel: pgx.Serializable}),
 )
@@ -206,7 +206,7 @@ func TestCreateUser(t *testing.T) {
 	var user User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
 		var err error
-		user, err = octobe.Execute(session, CreateUser("alice@example.com"))
+		user, err = octobe.Execute(ctx, session, CreateUser("alice@example.com"))
 		return err
 	})
 

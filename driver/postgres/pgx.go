@@ -85,8 +85,7 @@ func OpenPGXWithConn(c PGXConn) PGXOpen {
 // Non-transactional sessions execute directly on the underlying pgx connection.
 func (d *pgxConn) Begin(ctx context.Context) (octobe.Session[Builder], error) {
 	return &pgxSession{
-		ctx: ctx,
-		d:   d,
+		d: d,
 	}, nil
 }
 
@@ -113,7 +112,6 @@ func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Session[B
 	}
 
 	return &pgxSession{
-		ctx:       ctx,
 		cfg:       cfg,
 		tx:        tx,
 		committed: false,
@@ -145,7 +143,6 @@ func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session octobe.B
 // pgxSession manages a database session that may be transactional or non-transactional.
 // Not thread-safe - use one session per goroutine.
 type pgxSession struct {
-	ctx       context.Context
 	cfg       Config
 	tx        pgx.Tx
 	d         *pgxConn
@@ -156,7 +153,7 @@ type pgxSession struct {
 var _ octobe.Session[Builder] = &pgxSession{}
 
 // Commit commits the transaction. Only works for transactional sessions.
-func (s *pgxSession) Commit() error {
+func (s *pgxSession) Commit(ctx context.Context) error {
 	if s.committed {
 		return errors.New("cannot commit a session that has already been committed")
 	}
@@ -167,7 +164,7 @@ func (s *pgxSession) Commit() error {
 	if s.closed {
 		return errors.New("cannot commit a session that has already been closed")
 	}
-	err := s.tx.Commit(s.ctx)
+	err := s.tx.Commit(ctx)
 	s.committed = true
 	if err == nil {
 		s.closed = true
@@ -176,7 +173,7 @@ func (s *pgxSession) Commit() error {
 }
 
 // Rollback rolls back the transaction. Only works for transactional sessions.
-func (s *pgxSession) Rollback() error {
+func (s *pgxSession) Rollback(ctx context.Context) error {
 	if s.tx == nil {
 		return errors.New("cannot rollback without transaction")
 	}
@@ -186,16 +183,16 @@ func (s *pgxSession) Rollback() error {
 	defer func() {
 		s.closed = true
 	}()
-	return s.tx.Rollback(s.ctx)
+	return s.tx.Rollback(ctx)
 }
 
 // Close closes the session, rolling back if it is transactional and not committed.
-func (s *pgxSession) Close() error {
+func (s *pgxSession) Close(ctx context.Context) error {
 	if s.closed {
 		return nil
 	}
 	if s.cfg.txOptions != nil {
-		return s.Rollback()
+		return s.Rollback(ctx)
 	}
 	s.closed = true
 	return nil
@@ -242,7 +239,7 @@ func (s *pgxSegment) Arguments(args ...any) Segment {
 }
 
 // Exec executes the query and returns the number of affected rows.
-func (s *pgxSegment) Exec() (ExecResult, error) {
+func (s *pgxSegment) Exec(ctx context.Context) (ExecResult, error) {
 	if s.used {
 		return ExecResult{}, octobe.ErrAlreadyUsed
 	}
@@ -252,7 +249,7 @@ func (s *pgxSegment) Exec() (ExecResult, error) {
 		return ExecResult{}, err
 	}
 	if session.tx == nil {
-		res, err := session.d.conn.Exec(session.ctx, s.query, s.args...)
+		res, err := session.d.conn.Exec(ctx, s.query, s.args...)
 		if err != nil {
 			return ExecResult{}, err
 		}
@@ -262,7 +259,7 @@ func (s *pgxSegment) Exec() (ExecResult, error) {
 		}, nil
 	}
 
-	res, err := session.tx.Exec(session.ctx, s.query, s.args...)
+	res, err := session.tx.Exec(ctx, s.query, s.args...)
 	if err != nil {
 		return ExecResult{}, err
 	}
@@ -272,7 +269,7 @@ func (s *pgxSegment) Exec() (ExecResult, error) {
 }
 
 // QueryRow executes the query expecting exactly one row and scans into dest.
-func (s *pgxSegment) QueryRow(dest ...any) error {
+func (s *pgxSegment) QueryRow(ctx context.Context, dest ...any) error {
 	if s.used {
 		return octobe.ErrAlreadyUsed
 	}
@@ -282,13 +279,13 @@ func (s *pgxSegment) QueryRow(dest ...any) error {
 		return err
 	}
 	if session.tx == nil {
-		return session.d.conn.QueryRow(session.ctx, s.query, s.args...).Scan(dest...)
+		return session.d.conn.QueryRow(ctx, s.query, s.args...).Scan(dest...)
 	}
-	return session.tx.QueryRow(session.ctx, s.query, s.args...).Scan(dest...)
+	return session.tx.QueryRow(ctx, s.query, s.args...).Scan(dest...)
 }
 
 // Query executes the query and calls cb for each row in the result set.
-func (s *pgxSegment) Query(cb func(Rows) error) error {
+func (s *pgxSegment) Query(ctx context.Context, cb func(Rows) error) error {
 	if s.used {
 		return octobe.ErrAlreadyUsed
 	}
@@ -301,12 +298,12 @@ func (s *pgxSegment) Query(cb func(Rows) error) error {
 
 	var rows pgx.Rows
 	if session.tx == nil {
-		rows, err = session.d.conn.Query(session.ctx, s.query, s.args...)
+		rows, err = session.d.conn.Query(ctx, s.query, s.args...)
 		if err != nil {
 			return err
 		}
 	} else {
-		rows, err = session.tx.Query(session.ctx, s.query, s.args...)
+		rows, err = session.tx.Query(ctx, s.query, s.args...)
 		if err != nil {
 			return err
 		}

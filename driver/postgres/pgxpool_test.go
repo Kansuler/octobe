@@ -30,12 +30,12 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 	}
 
 	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err := octobe.ExecuteVoid(session, Migration())
+		err := octobe.ExecuteVoid(ctx, session, Migration())
 		if !assert.NoError(t, err) {
 			return err
 		}
 
-		p, err := octobe.Execute(session, AddProduct(name))
+		p, err := octobe.Execute(ctx, session, AddProduct(name))
 		if !assert.NoError(t, err) {
 			return err
 		}
@@ -48,7 +48,7 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 			return errors.New("expected name to be " + name)
 		}
 
-		products, err := octobe.Execute(session, ProductsByName(name))
+		products, err := octobe.Execute(ctx, session, ProductsByName(name))
 		if !assert.NoError(t, err) {
 			return err
 		}
@@ -95,12 +95,12 @@ func TestPGXPoolWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	p, err := octobe.Execute(session, AddProduct(name))
+	p, err := octobe.Execute(ctx, session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -113,7 +113,7 @@ func TestPGXPoolWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	products, err := octobe.Execute(session, ProductsByName(name))
+	products, err := octobe.Execute(ctx, session, ProductsByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -130,7 +130,7 @@ func TestPGXPoolWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = session.Commit()
+	err = session.Commit(ctx)
 	assert.NoError(t, err)
 	assert.NoError(t, m.AllExpectationsMet())
 }
@@ -155,14 +155,14 @@ func TestPGXPoolWithoutTx(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	defer func() { assert.NoError(t, session.Close()) }()
+	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	p, err := octobe.Execute(session, AddProduct(name))
+	p, err := octobe.Execute(ctx, session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -175,7 +175,7 @@ func TestPGXPoolWithoutTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	products, err := octobe.Execute(session, ProductsByName(name))
+	products, err := octobe.Execute(ctx, session, ProductsByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -212,7 +212,7 @@ func TestPGXPoolWithoutTxCloseReleasesSession(t *testing.T) {
 		t.FailNow()
 	}
 
-	assert.NoError(t, session.Close())
+	assert.NoError(t, session.Close(ctx))
 	assert.NoError(t, m.AllExpectationsMet())
 }
 
@@ -233,7 +233,7 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 	}
 
 	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err := octobe.ExecuteVoid(session, Migration())
+		err := octobe.ExecuteVoid(ctx, session, Migration())
 		return err
 	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 
@@ -259,7 +259,7 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 
 	assert.Panics(t, func() {
 		_ = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			err := octobe.ExecuteVoid(session, Migration())
+			err := octobe.ExecuteVoid(ctx, session, Migration())
 			if err != nil {
 				return err
 			}
@@ -292,12 +292,12 @@ func TestPGXPoolWithTxManualRollback(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	p, err := octobe.Execute(session, AddProduct(name))
+	p, err := octobe.Execute(ctx, session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -310,7 +310,7 @@ func TestPGXPoolWithTxManualRollback(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = session.Rollback()
+	err = session.Rollback(ctx)
 	assert.NoError(t, err)
 	assert.NoError(t, m.AllExpectationsMet())
 }
@@ -331,14 +331,14 @@ func TestPGXPoolWithoutTxCommit(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	defer func() { assert.NoError(t, session.Close()) }()
+	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	err = session.Commit()
+	err = session.Commit(ctx)
 	assert.Error(t, err)
 	assert.NoError(t, m.AllExpectationsMet())
 }
@@ -359,14 +359,14 @@ func TestPGXPoolWithoutTxRollback(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	defer func() { assert.NoError(t, session.Close()) }()
+	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	err = session.Rollback()
+	err = session.Rollback(ctx)
 	assert.Error(t, err)
 	assert.NoError(t, m.AllExpectationsMet())
 }
@@ -389,15 +389,15 @@ func TestPGXPoolSegmentUsedTwice(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	defer func() { assert.NoError(t, session.Close()) }()
+	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
 	t.Run("Exec", func(t *testing.T) {
 		segment := session.Builder()("CREATE TABLE IF NOT EXISTS products (id SERIAL PRIMARY KEY, name TEXT NOT NULL)")
 
-		_, err := segment.Exec()
+		_, err := segment.Exec(ctx)
 		assert.NoError(t, err)
 
-		_, err = segment.Exec()
+		_, err = segment.Exec(ctx)
 		assert.Error(t, err)
 		assert.Equal(t, octobe.ErrAlreadyUsed, err)
 	})
@@ -408,13 +408,13 @@ func TestPGXPoolSegmentUsedTwice(t *testing.T) {
 		segment := session.Builder()("INSERT INTO products (name) VALUES ($1) RETURNING id, name").Arguments(name)
 
 		var p Product
-		err := segment.QueryRow(&p.ID, &p.Name)
+		err := segment.QueryRow(ctx, &p.ID, &p.Name)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, p.ID)
 		assert.Equal(t, name, p.Name)
 
 		var p2 Product
-		err = segment.QueryRow(&p2.ID, &p2.Name)
+		err = segment.QueryRow(ctx, &p2.ID, &p2.Name)
 		assert.Error(t, err)
 		assert.Equal(t, octobe.ErrAlreadyUsed, err)
 	})
@@ -425,7 +425,7 @@ func TestPGXPoolSegmentUsedTwice(t *testing.T) {
 		segment := session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments(name)
 
 		var products []Product
-		err := segment.Query(func(r postgres.Rows) error {
+		err := segment.Query(ctx, func(r postgres.Rows) error {
 			for r.Next() {
 				var p Product
 				if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -439,7 +439,7 @@ func TestPGXPoolSegmentUsedTwice(t *testing.T) {
 		assert.Len(t, products, 1)
 
 		var products2 []Product
-		err = segment.Query(func(r postgres.Rows) error {
+		err = segment.Query(ctx, func(r postgres.Rows) error {
 			for r.Next() {
 				var p Product
 				if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -497,7 +497,7 @@ func TestPGXPoolCommitError(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = session.Commit()
+	err = session.Commit(ctx)
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	assert.NoError(t, m.AllExpectationsMet())
@@ -523,9 +523,9 @@ func TestPGXPoolSegmentExecError(t *testing.T) {
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		defer func() { assert.NoError(t, session.Close()) }()
+		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-		_, err = session.Builder()("INSERT INTO products (name) VALUES ($1)").Arguments("test").Exec()
+		_, err = session.Builder()("INSERT INTO products (name) VALUES ($1)").Arguments("test").Exec(ctx)
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)
 	})
@@ -544,7 +544,7 @@ func TestPGXPoolSegmentExecError(t *testing.T) {
 			t.FailNow()
 		}
 
-		_, err = session.Builder()("INSERT INTO products (name) VALUES ($1)").Arguments("test").Exec()
+		_, err = session.Builder()("INSERT INTO products (name) VALUES ($1)").Arguments("test").Exec(ctx)
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)
 	})
@@ -573,10 +573,10 @@ func TestPGXPoolSegmentQueryRowError(t *testing.T) {
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		defer func() { assert.NoError(t, session.Close()) }()
+		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
 		var id int
-		err = session.Builder()("SELECT id FROM products WHERE name = $1").Arguments("test").QueryRow(&id)
+		err = session.Builder()("SELECT id FROM products WHERE name = $1").Arguments("test").QueryRow(ctx, &id)
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)
 	})
@@ -597,7 +597,7 @@ func TestPGXPoolSegmentQueryRowError(t *testing.T) {
 		}
 
 		var id int
-		err = session.Builder()("SELECT id FROM products WHERE name = $1").Arguments("test").QueryRow(&id)
+		err = session.Builder()("SELECT id FROM products WHERE name = $1").Arguments("test").QueryRow(ctx, &id)
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)
 	})
@@ -625,9 +625,9 @@ func TestPGXPoolSegmentQueryError(t *testing.T) {
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		defer func() { assert.NoError(t, session.Close()) }()
+		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-		err = session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments("test").Query(func(r postgres.Rows) error {
+		err = session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments("test").Query(ctx, func(r postgres.Rows) error {
 			for r.Next() {
 				var p Product
 				if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -654,7 +654,7 @@ func TestPGXPoolSegmentQueryError(t *testing.T) {
 			t.FailNow()
 		}
 
-		err = session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments("test").Query(func(r postgres.Rows) error {
+		err = session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments("test").Query(ctx, func(r postgres.Rows) error {
 			for r.Next() {
 				var p Product
 				if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -682,9 +682,9 @@ func TestPGXPoolSegmentQueryError(t *testing.T) {
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		defer func() { assert.NoError(t, session.Close()) }()
+		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-		err = session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments("test").Query(func(r postgres.Rows) error {
+		err = session.Builder()("SELECT id, name FROM products WHERE name = $1").Arguments("test").Query(ctx, func(r postgres.Rows) error {
 			return expectedErr
 		})
 		assert.Error(t, err)

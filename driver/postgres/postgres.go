@@ -1,6 +1,8 @@
 package postgres
 
 import (
+	"context"
+
 	"github.com/Kansuler/octobe/v3"
 	"github.com/jackc/pgx/v5"
 )
@@ -62,24 +64,24 @@ func transactionOptions(opts []Option) []Option {
 //
 //	result, err := builder(`INSERT INTO users (name) VALUES ($1) RETURNING id`)
 //	    .Arguments("Alice")
-//	    .QueryRow(&userID)
+//	    .QueryRow(ctx, &userID)
 //
 // Multiple operations example:
 //
 //	// First query
 //	err := builder(`UPDATE users SET name = $1 WHERE id = $2`)
 //	    .Arguments("Alice", 123)
-//	    .QueryRow()
+//	    .QueryRow(ctx)
 //
 //	// Second query (new segment required)
 //	err = builder(`DELETE FROM sessions WHERE user_id = $1`)
 //	    .Arguments(123)
-//	    .Exec()
+//	    .Exec(ctx)
 type Segment interface {
 	Arguments(args ...any) Segment
-	Exec() (ExecResult, error)
-	QueryRow(dest ...any) error
-	Query(cb func(Rows) error) error
+	Exec(ctx context.Context) (ExecResult, error)
+	QueryRow(ctx context.Context, dest ...any) error
+	Query(ctx context.Context, cb func(Rows) error) error
 }
 
 // ExecResult contains the outcome of an INSERT, UPDATE, or DELETE operation.

@@ -28,14 +28,14 @@ func (s *PGXIntegrationSuite) SetupSuite() {
 	s.db = openPGXWithRetry(s.T(), s.ctx, integrationDSN(s.T()))
 
 	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(session, migrateProducts(pgxProductsTable))
+		return octobe.ExecuteVoid(s.ctx, session, migrateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
 
 func (s *PGXIntegrationSuite) SetupTest() {
 	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(session, truncateProducts(pgxProductsTable))
+		return octobe.ExecuteVoid(s.ctx, session, truncateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
@@ -46,7 +46,7 @@ func (s *PGXIntegrationSuite) TearDownSuite() {
 	}
 
 	_ = s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(session, dropProducts(pgxProductsTable))
+		return octobe.ExecuteVoid(s.ctx, session, dropProducts(pgxProductsTable))
 	})
 	s.Require().NoError(s.db.Close(s.ctx))
 }
@@ -57,7 +57,7 @@ func (s *PGXIntegrationSuite) TestStartTransactionCommits() {
 
 	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
 		var err error
-		created, err = octobe.Execute(session, createProduct(pgxProductsTable, name))
+		created, err = octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
 		return err
 	})
 	s.Require().NoError(err)
@@ -72,7 +72,7 @@ func (s *PGXIntegrationSuite) TestStartTransactionRollsBackOnError() {
 	expectedErr := errors.New("force rollback")
 
 	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		_, err := octobe.Execute(session, createProduct(pgxProductsTable, name))
+		_, err := octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
 		if err != nil {
 			return err
 		}
@@ -90,11 +90,11 @@ func (s *PGXIntegrationSuite) TestManualTransactionCommits() {
 
 	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
-	defer func() { _ = session.Rollback() }()
+	defer func() { _ = session.Rollback(s.ctx) }()
 
-	created, err := octobe.Execute(session, createProduct(pgxProductsTable, name))
+	created, err := octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
 	s.Require().NoError(err)
-	s.Require().NoError(session.Commit())
+	s.Require().NoError(session.Commit(s.ctx))
 
 	loaded, err := s.findPGXProduct(created.ID)
 	s.Require().NoError(err)
@@ -106,11 +106,11 @@ func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 
 	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
-	defer func() { _ = session.Rollback() }()
+	defer func() { _ = session.Rollback(s.ctx) }()
 
-	_, err = octobe.Execute(session, createProduct(pgxProductsTable, name))
+	_, err = octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
 	s.Require().NoError(err)
-	s.Require().NoError(session.Rollback())
+	s.Require().NoError(session.Rollback(s.ctx))
 
 	products, err := s.findPGXProductsByName(name)
 	s.Require().NoError(err)
@@ -120,13 +120,13 @@ func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 func (s *PGXIntegrationSuite) findPGXProduct(id int) (integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
-	defer func() { s.Require().NoError(session.Close()) }()
-	return octobe.Execute(session, productByID(pgxProductsTable, id))
+	defer func() { s.Require().NoError(session.Close(s.ctx)) }()
+	return octobe.Execute(s.ctx, session, productByID(pgxProductsTable, id))
 }
 
 func (s *PGXIntegrationSuite) findPGXProductsByName(name string) ([]integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
-	defer func() { s.Require().NoError(session.Close()) }()
-	return octobe.Execute(session, productsByName(pgxProductsTable, name))
+	defer func() { s.Require().NoError(session.Close(s.ctx)) }()
+	return octobe.Execute(s.ctx, session, productsByName(pgxProductsTable, name))
 }

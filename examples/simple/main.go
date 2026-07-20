@@ -21,74 +21,74 @@ type User struct {
 
 // Create table handler
 func CreateUsersTable() octobe.VoidHandler[postgres.Builder] {
-	return func(builder postgres.Builder) error {
+	return func(ctx context.Context, builder postgres.Builder) error {
 		query := builder(`
 			CREATE TABLE IF NOT EXISTS users (
 				id SERIAL PRIMARY KEY,
 				name VARCHAR(100) NOT NULL,
 				email VARCHAR(100) UNIQUE NOT NULL
 			)`)
-		_, err := query.Exec()
+		_, err := query.Exec(ctx)
 		return err
 	}
 }
 
 // Create user handler
 func CreateUser(name, email string) octobe.Handler[User, postgres.Builder] {
-	return func(builder postgres.Builder) (User, error) {
+	return func(ctx context.Context, builder postgres.Builder) (User, error) {
 		var user User
 		query := builder(`
 			INSERT INTO users (name, email)
 			VALUES ($1, $2)
 			RETURNING id, name, email`)
-		err := query.Arguments(name, email).QueryRow(&user.ID, &user.Name, &user.Email)
+		err := query.Arguments(name, email).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 		return user, err
 	}
 }
 
 // Get user by ID handler
 func GetUser(id int) octobe.Handler[User, postgres.Builder] {
-	return func(builder postgres.Builder) (User, error) {
+	return func(ctx context.Context, builder postgres.Builder) (User, error) {
 		var user User
 		query := builder(`
 			SELECT id, name, email
 			FROM users
 			WHERE id = $1`)
-		err := query.Arguments(id).QueryRow(&user.ID, &user.Name, &user.Email)
+		err := query.Arguments(id).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 		return user, err
 	}
 }
 
 // Update user handler
 func UpdateUser(id int, name, email string) octobe.Handler[User, postgres.Builder] {
-	return func(builder postgres.Builder) (User, error) {
+	return func(ctx context.Context, builder postgres.Builder) (User, error) {
 		var user User
 		query := builder(`
 			UPDATE users
 			SET name = $1, email = $2
 			WHERE id = $3
 			RETURNING id, name, email`)
-		err := query.Arguments(name, email, id).QueryRow(&user.ID, &user.Name, &user.Email)
+		err := query.Arguments(name, email, id).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 		return user, err
 	}
 }
 
 // Delete user handler
 func DeleteUser(id int) octobe.VoidHandler[postgres.Builder] {
-	return func(builder postgres.Builder) error {
+	return func(ctx context.Context, builder postgres.Builder) error {
 		query := builder(`DELETE FROM users WHERE id = $1`)
-		_, err := query.Arguments(id).Exec()
+		_, err := query.Arguments(id).Exec(ctx)
 		return err
 	}
 }
 
 // List all users handler
 func ListUsers() octobe.Handler[[]User, postgres.Builder] {
-	return func(builder postgres.Builder) ([]User, error) {
+	return func(ctx context.Context, builder postgres.Builder) ([]User, error) {
 		query := builder(`SELECT id, name, email FROM users ORDER BY id`)
 
 		var users []User
-		err := query.Query(func(rows postgres.Rows) error {
+		err := query.Query(ctx, func(rows postgres.Rows) error {
 			for rows.Next() {
 				var user User
 				if err := rows.Scan(&user.ID, &user.Name, &user.Email); err != nil {
@@ -132,7 +132,7 @@ func main() {
 
 	// Step 3: Create table (in a transaction)
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(session, CreateUsersTable())
+		return octobe.ExecuteVoid(ctx, session, CreateUsersTable())
 	})
 	if err != nil {
 		log.Fatalf("Failed to create table: %v", err)
@@ -142,7 +142,7 @@ func main() {
 	// Step 4: Create a user
 	var alice User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		alice, err = octobe.Execute(session, CreateUser("Alice Smith", "alice@example.com"))
+		alice, err = octobe.Execute(ctx, session, CreateUser("Alice Smith", "alice@example.com"))
 		return err
 	})
 	if err != nil {
@@ -153,7 +153,7 @@ func main() {
 	// Step 5: Create another user
 	var bob User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		bob, err = octobe.Execute(session, CreateUser("Bob Jones", "bob@example.com"))
+		bob, err = octobe.Execute(ctx, session, CreateUser("Bob Jones", "bob@example.com"))
 		return err
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func main() {
 	// Step 6: Read user back
 	var retrievedUser User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		retrievedUser, err = octobe.Execute(session, GetUser(alice.ID))
+		retrievedUser, err = octobe.Execute(ctx, session, GetUser(alice.ID))
 		return err
 	})
 	if err != nil {
@@ -175,7 +175,7 @@ func main() {
 	// Step 7: Update user
 	var updatedUser User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		updatedUser, err = octobe.Execute(session, UpdateUser(alice.ID, "Alice Johnson", "alice.johnson@example.com"))
+		updatedUser, err = octobe.Execute(ctx, session, UpdateUser(alice.ID, "Alice Johnson", "alice.johnson@example.com"))
 		return err
 	})
 	if err != nil {
@@ -186,7 +186,7 @@ func main() {
 	// Step 8: List all users
 	var users []User
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		users, err = octobe.Execute(session, ListUsers())
+		users, err = octobe.Execute(ctx, session, ListUsers())
 		return err
 	})
 	if err != nil {
@@ -199,7 +199,7 @@ func main() {
 
 	// Step 9: Delete a user
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(session, DeleteUser(bob.ID))
+		return octobe.ExecuteVoid(ctx, session, DeleteUser(bob.ID))
 	})
 	if err != nil {
 		log.Fatalf("Failed to delete user: %v", err)
@@ -208,7 +208,7 @@ func main() {
 
 	// Step 10: Verify deletion
 	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		users, err = octobe.Execute(session, ListUsers())
+		users, err = octobe.Execute(ctx, session, ListUsers())
 		return err
 	})
 	if err != nil {

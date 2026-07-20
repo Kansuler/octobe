@@ -28,11 +28,11 @@ func TestPGXWithTxInsideStartTransaction(t *testing.T) {
 
 	ctx := context.Background()
 	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err = octobe.ExecuteVoid(session, Migration())
+		err = octobe.ExecuteVoid(ctx, session, Migration())
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		product, err := octobe.Execute(session, AddProduct(name))
+		product, err := octobe.Execute(ctx, session, AddProduct(name))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -40,7 +40,7 @@ func TestPGXWithTxInsideStartTransaction(t *testing.T) {
 		assert.Equal(t, name, product.Name)
 		assert.NotZero(t, product.ID)
 
-		products, err := octobe.Execute(session, ProductsByName(name))
+		products, err := octobe.Execute(ctx, session, ProductsByName(name))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -80,12 +80,12 @@ func TestPGXWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	product, err := octobe.Execute(session, AddProduct(name))
+	product, err := octobe.Execute(ctx, session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -93,7 +93,7 @@ func TestPGXWithTx(t *testing.T) {
 	assert.Equal(t, name, product.Name)
 	assert.NotZero(t, product.ID)
 
-	products, err := octobe.Execute(session, ProductsByName(name))
+	products, err := octobe.Execute(ctx, session, ProductsByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -103,7 +103,7 @@ func TestPGXWithTx(t *testing.T) {
 		assert.NotZero(t, products[0].ID)
 	}
 
-	err = session.Commit()
+	err = session.Commit(ctx)
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -134,12 +134,12 @@ func TestPGXWithoutTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	product, err := octobe.Execute(session, AddProduct(name))
+	product, err := octobe.Execute(ctx, session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -147,7 +147,7 @@ func TestPGXWithoutTx(t *testing.T) {
 	assert.Equal(t, name, product.Name)
 	assert.NotZero(t, product.ID)
 
-	products, err := octobe.Execute(session, ProductsByName(name))
+	products, err := octobe.Execute(ctx, session, ProductsByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -164,14 +164,14 @@ func TestPGXWithoutTx(t *testing.T) {
 }
 
 func Migration() octobe.VoidHandler[postgres.Builder] {
-	return func(builder postgres.Builder) error {
+	return func(ctx context.Context, builder postgres.Builder) error {
 		query := builder(`
 			CREATE TABLE IF NOT EXISTS products (
 				id SERIAL PRIMARY KEY,
 				name TEXT NOT NULL
 			);
 		`)
-		_, err := query.Exec()
+		_, err := query.Exec(ctx)
 		return err
 	}
 }
@@ -182,27 +182,27 @@ type Product struct {
 }
 
 func AddProduct(name string) octobe.Handler[Product, postgres.Builder] {
-	return func(builder postgres.Builder) (Product, error) {
+	return func(ctx context.Context, builder postgres.Builder) (Product, error) {
 		var product Product
 		query := builder(`
 			INSERT INTO products (name) VALUES ($1) RETURNING id, name;
 		`)
 
 		query.Arguments(name)
-		err := query.QueryRow(&product.ID, &product.Name)
+		err := query.QueryRow(ctx, &product.ID, &product.Name)
 		return product, err
 	}
 }
 
 func ProductsByName(name string) octobe.Handler[[]Product, postgres.Builder] {
-	return func(builder postgres.Builder) ([]Product, error) {
+	return func(ctx context.Context, builder postgres.Builder) ([]Product, error) {
 		var products []Product
 		query := builder(`
 			SELECT id, name FROM products WHERE name = $1;
 		`)
 
 		query.Arguments(name)
-		err := query.Query(func(rows postgres.Rows) error {
+		err := query.Query(ctx, func(rows postgres.Rows) error {
 			if rows.Next() {
 				var product Product
 				err := rows.Scan(&product.ID, &product.Name)
@@ -233,7 +233,7 @@ func TestPGXWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errors.New("something went wrong")
 	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err = octobe.ExecuteVoid(session, Migration())
+		err = octobe.ExecuteVoid(ctx, session, Migration())
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -272,7 +272,7 @@ func TestPGXWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 	}()
 
 	_ = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err = octobe.ExecuteVoid(session, Migration())
+		err = octobe.ExecuteVoid(ctx, session, Migration())
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -301,17 +301,17 @@ func TestPGXWithTxManualRollback(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(session, Migration())
+	err = octobe.ExecuteVoid(ctx, session, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	_, err = octobe.Execute(session, AddProduct(name))
+	_, err = octobe.Execute(ctx, session, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	err = session.Rollback()
+	err = session.Rollback(ctx)
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -337,7 +337,7 @@ func TestPGXWithoutTxCommit(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = session.Commit()
+	err = session.Commit(ctx)
 	assert.Error(t, err)
 	assert.Equal(t, "cannot commit without transaction", err.Error())
 
@@ -362,7 +362,7 @@ func TestPGXWithoutTxRollback(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = session.Rollback()
+	err = session.Rollback(ctx)
 	assert.Error(t, err)
 	assert.Equal(t, "cannot rollback without transaction", err.Error())
 
@@ -389,18 +389,18 @@ func TestSegmentUsedTwice(t *testing.T) {
 			t.FailNow()
 		}
 
-		handler := func(builder postgres.Builder) error {
+		handler := func(ctx context.Context, builder postgres.Builder) error {
 			query := builder(`CREATE TABLE`)
-			_, err := query.Exec()
+			_, err := query.Exec(ctx)
 			if err != nil {
 				return err
 			}
 			// Use it again
-			_, err = query.Exec()
+			_, err = query.Exec(ctx)
 			return err
 		}
 
-		err = octobe.ExecuteVoid(session, handler)
+		err = octobe.ExecuteVoid(ctx, session, handler)
 		assert.ErrorIs(t, err, octobe.ErrAlreadyUsed)
 
 		err = ob.Close(ctx)
@@ -427,19 +427,19 @@ func TestSegmentUsedTwice(t *testing.T) {
 			t.FailNow()
 		}
 
-		handler := func(builder postgres.Builder) error {
+		handler := func(ctx context.Context, builder postgres.Builder) error {
 			query := builder(`SELECT`)
 			var p Product
-			err := query.QueryRow(&p.ID, &p.Name)
+			err := query.QueryRow(ctx, &p.ID, &p.Name)
 			if err != nil {
 				return err
 			}
 			// Use it again
-			err = query.QueryRow(&p.ID, &p.Name)
+			err = query.QueryRow(ctx, &p.ID, &p.Name)
 			return err
 		}
 
-		err = octobe.ExecuteVoid(session, handler)
+		err = octobe.ExecuteVoid(ctx, session, handler)
 		assert.ErrorIs(t, err, octobe.ErrAlreadyUsed)
 
 		err = ob.Close(ctx)
@@ -464,22 +464,22 @@ func TestSegmentUsedTwice(t *testing.T) {
 			t.FailNow()
 		}
 
-		handler := func(builder postgres.Builder) error {
+		handler := func(ctx context.Context, builder postgres.Builder) error {
 			query := builder(`SELECT`)
-			err := query.Query(func(rows postgres.Rows) error {
+			err := query.Query(ctx, func(rows postgres.Rows) error {
 				return nil
 			})
 			if err != nil {
 				return err
 			}
 			// Use it again
-			err = query.Query(func(rows postgres.Rows) error {
+			err = query.Query(ctx, func(rows postgres.Rows) error {
 				return nil
 			})
 			return err
 		}
 
-		err = octobe.ExecuteVoid(session, handler)
+		err = octobe.ExecuteVoid(ctx, session, handler)
 		assert.ErrorIs(t, err, octobe.ErrAlreadyUsed)
 
 		err = ob.Close(ctx)
@@ -533,7 +533,7 @@ func TestCommitError(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = session.Commit()
+	err = session.Commit(ctx)
 	assert.ErrorIs(t, err, expectedErr)
 
 	err = ob.Close(ctx)
@@ -559,9 +559,9 @@ func TestSegmentExecError(t *testing.T) {
 			t.FailNow()
 		}
 
-		err = octobe.ExecuteVoid(session, func(builder postgres.Builder) error {
+		err = octobe.ExecuteVoid(ctx, session, func(ctx context.Context, builder postgres.Builder) error {
 			query := builder("INSERT")
-			_, err := query.Exec()
+			_, err := query.Exec(ctx)
 			return err
 		})
 		assert.ErrorIs(t, err, expectedErr)
@@ -587,9 +587,9 @@ func TestSegmentExecError(t *testing.T) {
 
 		ctx := context.Background()
 		err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			err := octobe.ExecuteVoid(session, func(builder postgres.Builder) error {
+			err := octobe.ExecuteVoid(ctx, session, func(ctx context.Context, builder postgres.Builder) error {
 				query := builder("INSERT")
-				_, err := query.Exec()
+				_, err := query.Exec(ctx)
 				return err
 			})
 			return err
@@ -622,10 +622,10 @@ func TestSegmentQueryRowError(t *testing.T) {
 			t.FailNow()
 		}
 
-		_, err = octobe.Execute(session, func(builder postgres.Builder) (Product, error) {
+		_, err = octobe.Execute(ctx, session, func(ctx context.Context, builder postgres.Builder) (Product, error) {
 			var p Product
 			query := builder("SELECT")
-			err := query.QueryRow(&p.ID, &p.Name)
+			err := query.QueryRow(ctx, &p.ID, &p.Name)
 			return p, err
 		})
 		assert.ErrorIs(t, err, expectedErr)
@@ -651,10 +651,10 @@ func TestSegmentQueryRowError(t *testing.T) {
 
 		ctx := context.Background()
 		err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			_, err := octobe.Execute(session, func(builder postgres.Builder) (Product, error) {
+			_, err := octobe.Execute(ctx, session, func(ctx context.Context, builder postgres.Builder) (Product, error) {
 				var p Product
 				query := builder("SELECT")
-				err := query.QueryRow(&p.ID, &p.Name)
+				err := query.QueryRow(ctx, &p.ID, &p.Name)
 				return p, err
 			})
 			return err
@@ -687,9 +687,9 @@ func TestSegmentQueryError(t *testing.T) {
 			t.FailNow()
 		}
 
-		err = octobe.ExecuteVoid(session, func(builder postgres.Builder) error {
+		err = octobe.ExecuteVoid(ctx, session, func(ctx context.Context, builder postgres.Builder) error {
 			query := builder("SELECT")
-			err := query.Query(func(rows postgres.Rows) error { return nil })
+			err := query.Query(ctx, func(rows postgres.Rows) error { return nil })
 			return err
 		})
 		assert.ErrorIs(t, err, expectedErr)
@@ -715,9 +715,9 @@ func TestSegmentQueryError(t *testing.T) {
 
 		ctx := context.Background()
 		err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			err := octobe.ExecuteVoid(session, func(builder postgres.Builder) error {
+			err := octobe.ExecuteVoid(ctx, session, func(ctx context.Context, builder postgres.Builder) error {
 				query := builder("SELECT")
-				err := query.Query(func(rows postgres.Rows) error { return nil })
+				err := query.Query(ctx, func(rows postgres.Rows) error { return nil })
 				return err
 			})
 			return err
@@ -748,9 +748,9 @@ func TestSegmentQueryError(t *testing.T) {
 			t.FailNow()
 		}
 
-		err = octobe.ExecuteVoid(session, func(builder postgres.Builder) error {
+		err = octobe.ExecuteVoid(ctx, session, func(ctx context.Context, builder postgres.Builder) error {
 			query := builder("SELECT")
-			err := query.Query(func(rows postgres.Rows) error { return expectedErr })
+			err := query.Query(ctx, func(rows postgres.Rows) error { return expectedErr })
 			return err
 		})
 		assert.ErrorIs(t, err, expectedErr)
@@ -776,9 +776,9 @@ func TestSegmentQueryError(t *testing.T) {
 
 		ctx := context.Background()
 		err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			err := octobe.ExecuteVoid(session, func(builder postgres.Builder) error {
+			err := octobe.ExecuteVoid(ctx, session, func(ctx context.Context, builder postgres.Builder) error {
 				query := builder("SELECT")
-				err := query.Query(func(rows postgres.Rows) error { return expectedErr })
+				err := query.Query(ctx, func(rows postgres.Rows) error { return expectedErr })
 				return err
 			})
 			return err
