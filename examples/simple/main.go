@@ -131,8 +131,8 @@ func main() {
 	fmt.Println("✓ Connected to database")
 
 	// Step 3: Create table (in a transaction)
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(ctx, session, CreateUsersTable())
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(ctx, CreateUsersTable())
 	})
 	if err != nil {
 		log.Fatalf("Failed to create table: %v", err)
@@ -141,8 +141,8 @@ func main() {
 
 	// Step 4: Create a user
 	var alice User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		alice, err = octobe.Execute(ctx, session, CreateUser("Alice Smith", "alice@example.com"))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		alice, err = session.Execute(ctx, CreateUser("Alice Smith", "alice@example.com"))
 		return err
 	})
 	if err != nil {
@@ -152,8 +152,8 @@ func main() {
 
 	// Step 5: Create another user
 	var bob User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		bob, err = octobe.Execute(ctx, session, CreateUser("Bob Jones", "bob@example.com"))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		bob, err = session.Execute(ctx, CreateUser("Bob Jones", "bob@example.com"))
 		return err
 	})
 	if err != nil {
@@ -163,8 +163,8 @@ func main() {
 
 	// Step 6: Read user back
 	var retrievedUser User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		retrievedUser, err = octobe.Execute(ctx, session, GetUser(alice.ID))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		retrievedUser, err = session.Execute(ctx, GetUser(alice.ID))
 		return err
 	})
 	if err != nil {
@@ -174,8 +174,8 @@ func main() {
 
 	// Step 7: Update user
 	var updatedUser User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		updatedUser, err = octobe.Execute(ctx, session, UpdateUser(alice.ID, "Alice Johnson", "alice.johnson@example.com"))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		updatedUser, err = session.Execute(ctx, UpdateUser(alice.ID, "Alice Johnson", "alice.johnson@example.com"))
 		return err
 	})
 	if err != nil {
@@ -185,8 +185,8 @@ func main() {
 
 	// Step 8: List all users
 	var users []User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		users, err = octobe.Execute(ctx, session, ListUsers())
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		users, err = session.Execute(ctx, ListUsers())
 		return err
 	})
 	if err != nil {
@@ -198,8 +198,8 @@ func main() {
 	}
 
 	// Step 9: Delete a user
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(ctx, session, DeleteUser(bob.ID))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(ctx, DeleteUser(bob.ID))
 	})
 	if err != nil {
 		log.Fatalf("Failed to delete user: %v", err)
@@ -207,8 +207,8 @@ func main() {
 	fmt.Printf("✓ Deleted user with ID: %d\n", bob.ID)
 
 	// Step 10: Verify deletion
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		users, err = octobe.Execute(ctx, session, ListUsers())
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		users, err = session.Execute(ctx, ListUsers())
 		return err
 	})
 	if err != nil {

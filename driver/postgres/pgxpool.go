@@ -95,15 +95,15 @@ func OpenPGXWithPool(pool PGXPool) PGXPoolOpen {
 
 // Begin starts a new session, optionally within a transaction.
 // Non-transactional sessions acquire one pool connection and keep it until Close.
-func (d *pgxpoolConn) Begin(ctx context.Context) (octobe.Session[Builder], error) {
+func (d *pgxpoolConn) Begin(ctx context.Context) (*octobe.Session[Builder], error) {
 	conn, err := d.acquireSession(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pgxpoolSession{
+	return octobe.NewSession(&pgxpoolSession{
 		conn: conn,
-	}, nil
+	}), nil
 }
 
 func (d *pgxpoolConn) acquireSession(ctx context.Context) (PGXPoolSessionConn, error) {
@@ -133,7 +133,7 @@ func (d *pgxpoolConn) acquireSession(ctx context.Context) (PGXPoolSessionConn, e
 }
 
 // BeginTx starts a new transactional session.
-func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Session[Builder], error) {
+func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Session[Builder], error) {
 	var cfg Config
 	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
@@ -154,12 +154,12 @@ func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Sessi
 		return nil, err
 	}
 
-	return &pgxSession{
+	return octobe.NewSession(&pgxSession{
 		cfg:       cfg,
 		tx:        tx,
 		committed: false,
 		closed:    false,
-	}, nil
+	}), nil
 }
 
 // Close releases the pool connection.
@@ -180,7 +180,7 @@ func (d *pgxpoolConn) Ping(ctx context.Context) error {
 }
 
 // StartTransaction starts a new transactional session.
-func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...Option) (err error) {
+func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session *octobe.Session[Builder]) error, opts ...Option) (err error) {
 	return octobe.StartTransaction[PGXPool](ctx, d, fn, opts...)
 }
 
@@ -193,7 +193,7 @@ type pgxpoolSession struct {
 	closed    bool
 }
 
-var _ octobe.Session[Builder] = &pgxpoolSession{}
+var _ octobe.Backend[Builder] = &pgxpoolSession{}
 
 // Commit commits the transaction.
 func (s *pgxpoolSession) Commit(ctx context.Context) error {

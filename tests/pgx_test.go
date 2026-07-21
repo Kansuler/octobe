@@ -27,15 +27,15 @@ func (s *PGXIntegrationSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.db = openPGXWithRetry(s.T(), s.ctx, integrationDSN(s.T()))
 
-	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(s.ctx, session, migrateProducts(pgxProductsTable))
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(s.ctx, migrateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
 
 func (s *PGXIntegrationSuite) SetupTest() {
-	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(s.ctx, session, truncateProducts(pgxProductsTable))
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(s.ctx, truncateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
@@ -45,8 +45,8 @@ func (s *PGXIntegrationSuite) TearDownSuite() {
 		return
 	}
 
-	_ = s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(s.ctx, session, dropProducts(pgxProductsTable))
+	_ = s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(s.ctx, dropProducts(pgxProductsTable))
 	})
 	s.Require().NoError(s.db.Close(s.ctx))
 }
@@ -55,9 +55,9 @@ func (s *PGXIntegrationSuite) TestStartTransactionCommits() {
 	name := "pgx committed product"
 	var created integrationProduct
 
-	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
 		var err error
-		created, err = octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
+		created, err = session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 		return err
 	})
 	s.Require().NoError(err)
@@ -71,8 +71,8 @@ func (s *PGXIntegrationSuite) TestStartTransactionRollsBackOnError() {
 	name := "pgx rolled back product"
 	expectedErr := errors.New("force rollback")
 
-	err := s.db.StartTransaction(s.ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		_, err := octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+		_, err := session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func (s *PGXIntegrationSuite) TestManualTransactionCommits() {
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 
-	created, err := octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
+	created, err := session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 	s.Require().NoError(err)
 	s.Require().NoError(session.Commit(s.ctx))
 
@@ -108,7 +108,7 @@ func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 
-	_, err = octobe.Execute(s.ctx, session, createProduct(pgxProductsTable, name))
+	_, err = session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 	s.Require().NoError(err)
 	s.Require().NoError(session.Rollback(s.ctx))
 
@@ -121,12 +121,12 @@ func (s *PGXIntegrationSuite) findPGXProduct(id int) (integrationProduct, error)
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(session.Close(s.ctx)) }()
-	return octobe.Execute(s.ctx, session, productByID(pgxProductsTable, id))
+	return session.Execute(s.ctx, productByID(pgxProductsTable, id))
 }
 
 func (s *PGXIntegrationSuite) findPGXProductsByName(name string) ([]integrationProduct, error) {
 	session, err := s.db.Begin(s.ctx)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(session.Close(s.ctx)) }()
-	return octobe.Execute(s.ctx, session, productsByName(pgxProductsTable, name))
+	return session.Execute(s.ctx, productsByName(pgxProductsTable, name))
 }

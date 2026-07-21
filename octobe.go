@@ -13,8 +13,8 @@
 //	    log.Fatal(err)
 //	}
 //
-//	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-//	    user, err := octobe.Execute(ctx, session, CreateUser("Alice"))
+//	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+//	    user, err := session.Execute(ctx, CreateUser("Alice"))
 //	    return err // Automatic rollback on error, commit on success
 //	})
 package octobe
@@ -48,10 +48,10 @@ type Option[CONFIG any] func(cfg *CONFIG)
 // optimizations while providing a consistent interface across database types.
 type Driver[DRIVER any, CONFIG any, BUILDER any] interface {
 	// Begin starts a new non-transactional database session.
-	Begin(ctx context.Context) (Session[BUILDER], error)
+	Begin(ctx context.Context) (*Session[BUILDER], error)
 
 	// BeginTx starts a transactional database session.
-	BeginTx(ctx context.Context, opts ...Option[CONFIG]) (Session[BUILDER], error)
+	BeginTx(ctx context.Context, opts ...Option[CONFIG]) (*Session[BUILDER], error)
 
 	// Close releases all database connections and resources.
 	Close(ctx context.Context) error
@@ -60,7 +60,7 @@ type Driver[DRIVER any, CONFIG any, BUILDER any] interface {
 	Ping(ctx context.Context) error
 
 	// StartTransaction executes fn within a transaction, automatically handling commit/rollback.
-	StartTransaction(ctx context.Context, fn func(session BuilderSession[BUILDER]) error, opts ...Option[CONFIG]) (err error)
+	StartTransaction(ctx context.Context, fn func(session *Session[BUILDER]) error, opts ...Option[CONFIG]) (err error)
 }
 
 // Open initializes and returns a configured driver instance. This function type
@@ -100,8 +100,8 @@ func New[DRIVER any, CONFIG any, BUILDER any](init Open[DRIVER, CONFIG, BUILDER]
 // Non-transactional sessions execute queries immediately without transaction boundaries
 // and must call Close(ctx) to release session resources.
 //
-// Sessions embed BuilderSession to provide direct access to query construction methods.
-type Session[BUILDER any] interface {
+// Sessions embed Backend to provide direct access to query construction methods.
+type Backend[BUILDER any] interface {
 	// Commit persists all changes made within the transaction.
 	// Only valid for transactional sessions.
 	Commit(ctx context.Context) error
@@ -114,18 +114,42 @@ type Session[BUILDER any] interface {
 	// Close rolls back the transaction. Close is idempotent.
 	Close(ctx context.Context) error
 
-	BuilderSession[BUILDER]
+	// Builder returns a new builder instance for constructing queries.
+	Builder() BUILDER
 }
 
-// BuilderSession provides access to the query builder for constructing database operations.
-// This interface is embedded in Session and used directly by StartTransaction for
-// automatic transaction management.
-//
-// The Builder creates Segment instances that represent prepared queries with arguments.
-type BuilderSession[BUILDER any] interface {
-	// Builder returns a query builder function for this session.
-	// Each call to Builder() creates segments scoped to this session.
-	Builder() BUILDER
+func NewSession[BUILDER any](backend Backend[BUILDER]) *Session[BUILDER] {
+	return &Session[BUILDER]{
+		backend: backend,
+	}
+}
+
+// Session holds a database session, providing methods for executing queries and transactions.
+type Session[BUILDER any] struct {
+	backend Backend[BUILDER]
+}
+
+// Commit persists all changes made within the transaction.
+// Only valid for transactional sessions.
+func (s Session[BUILDER]) Commit(ctx context.Context) error {
+	return s.backend.Commit(ctx)
+}
+
+// Rollback discards all changes made within the transaction.
+// Only valid for transactional sessions.
+func (s Session[BUILDER]) Rollback(ctx context.Context) error {
+	return s.backend.Rollback(ctx)
+}
+
+// Close releases session resources. For uncommitted transactional sessions,
+// Close rolls back the transaction. Close is idempotent.
+func (s Session[BUILDER]) Close(ctx context.Context) error {
+	return s.backend.Close(ctx)
+}
+
+// Builder returns the underlying builder for this session.
+func (s Session[BUILDER]) Builder() BUILDER {
+	return s.backend.Builder()
 }
 
 // StartTransaction executes fn within a database transaction, automatically handling commit/rollback.
@@ -137,21 +161,21 @@ type BuilderSession[BUILDER any] interface {
 // - Rolls back on any error or panic
 // - Ensures proper cleanup in all cases
 //
-// The function parameter receives a BuilderSession that can be used to execute
+// The function parameter receives a Session that can be used to execute
 // multiple related database operations within the same transaction.
 //
 // Example:
 //
-//	err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-//	    user, err := octobe.Execute(ctx, session, CreateUser("Alice"))
+//	err := db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+//	    user, err := session.Execute(ctx, CreateUser("Alice"))
 //	    if err != nil {
 //	        return err // Automatic rollback
 //	    }
 //
-//	    _, err = octobe.Execute(ctx, session, CreateProfile(user.ID))
+//	    _, err = session.Execute(ctx, CreateProfile(user.ID))
 //	    return err // Automatic commit if nil, rollback if error
 //	})
-func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver Driver[DRIVER, CONFIG, BUILDER], fn func(session BuilderSession[BUILDER]) error, opts ...Option[CONFIG]) (err error) {
+func StartTransaction[DRIVER, CONFIG, BUILDER any](ctx context.Context, driver Driver[DRIVER, CONFIG, BUILDER], fn func(session *Session[BUILDER]) error, opts ...Option[CONFIG]) (err error) {
 	session, err := driver.BeginTx(ctx, opts...)
 	if err != nil {
 		return err
@@ -210,8 +234,8 @@ type Handler[RESULT, BUILDER any] func(context.Context, BUILDER) (RESULT, error)
 type VoidHandler[BUILDER any] func(context.Context, BUILDER) error
 
 // Execute runs a handler function with the session's query builder.
-func Execute[RESULT, BUILDER any](ctx context.Context, session BuilderSession[BUILDER], f Handler[RESULT, BUILDER]) (RESULT, error) {
-	return f(ctx, session.Builder())
+func (s Session[BUILDER]) Execute[RESULT any](ctx context.Context, f Handler[RESULT, BUILDER]) (RESULT, error) {
+	return f(ctx, s.backend.Builder())
 }
 
 // ExecuteVoid runs a void handler (one that returns octobe.Void) and returns only the error.
@@ -219,12 +243,12 @@ func Execute[RESULT, BUILDER any](ctx context.Context, session BuilderSession[BU
 //
 // Example:
 //
-//	err := octobe.ExecuteVoid(ctx, session, DeleteUser(123))
+//	err := session.ExecuteVoid(ctx, DeleteUser(123))
 //	if err != nil {
 //	    return fmt.Errorf("failed to delete user: %w", err)
 //	}
-func ExecuteVoid[BUILDER any](ctx context.Context, session BuilderSession[BUILDER], f VoidHandler[BUILDER]) error {
-	return f(ctx, session.Builder())
+func (s Session[BUILDER]) ExecuteVoid(ctx context.Context, f VoidHandler[BUILDER]) error {
+	return f(ctx, s.backend.Builder())
 }
 
 // ExecuteMany runs multiple handlers in sequence within the same session.
@@ -233,15 +257,15 @@ func ExecuteVoid[BUILDER any](ctx context.Context, session BuilderSession[BUILDE
 //
 // Example:
 //
-//	results, err := octobe.ExecuteMany(ctx, session,
+//	results, err := session.ExecuteMany(ctx,
 //	    CreateUser("Alice"),
 //	    CreateUser("Bob"),
 //	    CreateUser("Charlie"),
 //	)
-func ExecuteMany[RESULT, BUILDER any](ctx context.Context, session BuilderSession[BUILDER], handlers ...Handler[RESULT, BUILDER]) ([]RESULT, error) {
+func (s Session[BUILDER]) ExecuteMany[RESULT any](ctx context.Context, handlers ...Handler[RESULT, BUILDER]) ([]RESULT, error) {
 	results := make([]RESULT, 0, len(handlers))
 	for i, handler := range handlers {
-		result, err := handler(ctx, session.Builder())
+		result, err := handler(ctx, s.backend.Builder())
 		if err != nil {
 			return nil, fmt.Errorf("handler %d failed: %w", i, err)
 		}

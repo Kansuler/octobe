@@ -1,8 +1,6 @@
 module github.com/Kansuler/octobe/v3
 
-go 1.25.0
-
-toolchain go1.26.5
+go 1.27rc2
 
 require (
 	github.com/jackc/pgx/v5 v5.10.0

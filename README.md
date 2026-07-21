@@ -57,9 +57,9 @@ func Signup(ctx context.Context, email string) (User, error) {
 	defer db.Close(ctx)
 
 	var user User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
 		var err error
-		user, err = octobe.Execute(ctx, session, CreateUser(email))
+		user, err = session.Execute(ctx, CreateUser(email))
 		return err
 	})
 	return user, err
@@ -102,13 +102,13 @@ func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
 Compose several operations in the same transaction:
 
 ```go
-err := db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-	user, err := octobe.Execute(ctx, session, CreateUser("alice@example.com"))
+err := db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	user, err := session.Execute(ctx, CreateUser("alice@example.com"))
 	if err != nil {
 		return err
 	}
 
-	return octobe.ExecuteVoid(ctx, session, CreateAuditEvent(user.ID, "signup"))
+	return session.ExecuteVoid(ctx, CreateAuditEvent(user.ID, "signup"))
 })
 ```
 
@@ -121,7 +121,7 @@ if err != nil {
 }
 defer session.Close(ctx)
 
-user, err := octobe.Execute(ctx, session, GetUser(123))
+user, err := session.Execute(ctx, GetUser(123))
 ```
 
 ## Why use Octobe instead of another package?
@@ -180,8 +180,8 @@ Set transaction options when needed:
 ```go
 err := db.StartTransaction(
 	ctx,
-	func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(ctx, session, RebuildReport())
+	func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(ctx, RebuildReport())
 	},
 	postgres.WithPGXTxOptions(postgres.PGXTxOptions{IsoLevel: pgx.Serializable}),
 )
@@ -204,9 +204,9 @@ func TestCreateUser(t *testing.T) {
 	pgxMock.ExpectCommit()
 
 	var user User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
 		var err error
-		user, err = octobe.Execute(ctx, session, CreateUser("alice@example.com"))
+		user, err = session.Execute(ctx, CreateUser("alice@example.com"))
 		return err
 	})
 

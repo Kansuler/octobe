@@ -353,11 +353,11 @@ func (s *BlogService) CreateUserAndWelcomePost(ctx context.Context, username, em
 	var user User
 	var post Post
 
-	err := s.db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+	err := s.db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
 		var err error
 
 		// Create user
-		user, err = octobe.Execute(ctx, session, CreateUser(username, email))
+		user, err = session.Execute(ctx, CreateUser(username, email))
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
@@ -366,7 +366,7 @@ func (s *BlogService) CreateUserAndWelcomePost(ctx context.Context, username, em
 		welcomeTitle := fmt.Sprintf("Welcome %s!", username)
 		welcomeContent := fmt.Sprintf("Hello %s! Welcome to our blog platform. This is your first post!", username)
 
-		post, err = octobe.Execute(ctx, session, CreatePost(welcomeTitle, welcomeContent, user.ID))
+		post, err = session.Execute(ctx, CreatePost(welcomeTitle, welcomeContent, user.ID))
 		if err != nil {
 			return fmt.Errorf("failed to create welcome post: %w", err)
 		}
@@ -384,15 +384,15 @@ func (s *BlogService) GetPostWithComments(ctx context.Context, postID int) (*Pos
 	var post Post
 	var comments []Comment
 
-	err := s.db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
+	err := s.db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
 		var err error
 
-		post, err = octobe.Execute(ctx, session, GetPostWithAuthor(postID))
+		post, err = session.Execute(ctx, GetPostWithAuthor(postID))
 		if err != nil {
 			return fmt.Errorf("failed to get post: %w", err)
 		}
 
-		comments, err = octobe.Execute(ctx, session, GetCommentsByPost(postID))
+		comments, err = session.Execute(ctx, GetCommentsByPost(postID))
 		if err != nil {
 			return fmt.Errorf("failed to get comments: %w", err)
 		}
@@ -435,8 +435,8 @@ func main() {
 	log.Println("Connected to database successfully")
 
 	// Create schema
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		return octobe.ExecuteVoid(ctx, session, CreateSchema())
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		return session.ExecuteVoid(ctx, CreateSchema())
 	})
 	if err != nil {
 		log.Fatalf("Failed to create schema: %v", err)
@@ -457,8 +457,8 @@ func main() {
 
 	// Demo: Create another user
 	var bob User
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		bob, err = octobe.Execute(ctx, session, CreateUser("bob", "bob@example.com"))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		bob, err = session.Execute(ctx, CreateUser("bob", "bob@example.com"))
 		return err
 	})
 	if err != nil {
@@ -467,8 +467,8 @@ func main() {
 	fmt.Printf("Created user: %s (ID: %d)\n", bob.Username, bob.ID)
 
 	// Demo: Create a blog post with tags
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		post, err := octobe.Execute(ctx, session, CreatePostWithTags(
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		post, err := session.Execute(ctx, CreatePostWithTags(
 			"Getting Started with Go",
 			"Go is a fantastic programming language for backend development...",
 			bob.ID,
@@ -485,8 +485,8 @@ func main() {
 	}
 
 	// Demo: Add comments
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		comment, err := octobe.Execute(ctx, session, CreateComment(welcomePost.ID, bob.ID, "Welcome to the platform, Alice!"))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		comment, err := session.Execute(ctx, CreateComment(welcomePost.ID, bob.ID, "Welcome to the platform, Alice!"))
 		if err != nil {
 			return err
 		}
@@ -516,8 +516,8 @@ func main() {
 	}
 
 	// Demo: Get all posts by alice
-	err = db.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		posts, err := octobe.Execute(ctx, session, GetPostsByAuthor(user.ID))
+	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		posts, err := session.Execute(ctx, GetPostsByAuthor(user.ID))
 		if err != nil {
 			return err
 		}

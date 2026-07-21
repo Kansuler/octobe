@@ -29,13 +29,13 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err := octobe.ExecuteVoid(ctx, session, Migration())
+	err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		err := session.ExecuteVoid(ctx, Migration())
 		if !assert.NoError(t, err) {
 			return err
 		}
 
-		p, err := octobe.Execute(ctx, session, AddProduct(name))
+		p, err := session.Execute(ctx, AddProduct(name))
 		if !assert.NoError(t, err) {
 			return err
 		}
@@ -48,7 +48,7 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 			return errors.New("expected name to be " + name)
 		}
 
-		products, err := octobe.Execute(ctx, session, ProductsByName(name))
+		products, err := session.Execute(ctx, ProductsByName(name))
 		if !assert.NoError(t, err) {
 			return err
 		}
@@ -95,12 +95,12 @@ func TestPGXPoolWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(ctx, session, Migration())
+	err = session.ExecuteVoid(ctx, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	p, err := octobe.Execute(ctx, session, AddProduct(name))
+	p, err := session.Execute(ctx, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -113,7 +113,7 @@ func TestPGXPoolWithTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	products, err := octobe.Execute(ctx, session, ProductsByName(name))
+	products, err := session.Execute(ctx, ProductsByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -157,12 +157,12 @@ func TestPGXPoolWithoutTx(t *testing.T) {
 	}
 	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-	err = octobe.ExecuteVoid(ctx, session, Migration())
+	err = session.ExecuteVoid(ctx, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	p, err := octobe.Execute(ctx, session, AddProduct(name))
+	p, err := session.Execute(ctx, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -175,7 +175,7 @@ func TestPGXPoolWithoutTx(t *testing.T) {
 		t.FailNow()
 	}
 
-	products, err := octobe.Execute(ctx, session, ProductsByName(name))
+	products, err := session.Execute(ctx, ProductsByName(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -232,8 +232,8 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-		err := octobe.ExecuteVoid(ctx, session, Migration())
+	err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		err := session.ExecuteVoid(ctx, Migration())
 		return err
 	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 
@@ -258,8 +258,8 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		_ = ob.StartTransaction(ctx, func(session octobe.BuilderSession[postgres.Builder]) error {
-			err := octobe.ExecuteVoid(ctx, session, Migration())
+		_ = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+			err := session.ExecuteVoid(ctx, Migration())
 			if err != nil {
 				return err
 			}
@@ -292,12 +292,12 @@ func TestPGXPoolWithTxManualRollback(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = octobe.ExecuteVoid(ctx, session, Migration())
+	err = session.ExecuteVoid(ctx, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	p, err := octobe.Execute(ctx, session, AddProduct(name))
+	p, err := session.Execute(ctx, AddProduct(name))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -333,7 +333,7 @@ func TestPGXPoolWithoutTxCommit(t *testing.T) {
 	}
 	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-	err = octobe.ExecuteVoid(ctx, session, Migration())
+	err = session.ExecuteVoid(ctx, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -361,7 +361,7 @@ func TestPGXPoolWithoutTxRollback(t *testing.T) {
 	}
 	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-	err = octobe.ExecuteVoid(ctx, session, Migration())
+	err = session.ExecuteVoid(ctx, Migration())
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}

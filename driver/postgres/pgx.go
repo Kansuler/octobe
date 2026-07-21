@@ -83,14 +83,14 @@ func OpenPGXWithConn(c PGXConn) PGXOpen {
 
 // Begin starts a new session, optionally within a transaction if txOptions are provided.
 // Non-transactional sessions execute directly on the underlying pgx connection.
-func (d *pgxConn) Begin(ctx context.Context) (octobe.Session[Builder], error) {
-	return &pgxSession{
+func (d *pgxConn) Begin(ctx context.Context) (*octobe.Session[Builder], error) {
+	return octobe.NewSession(&pgxSession{
 		d: d,
-	}, nil
+	}), nil
 }
 
 // BeginTx starts a new transactional session.
-func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Session[Builder], error) {
+func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Session[Builder], error) {
 	var cfg Config
 	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
@@ -111,12 +111,14 @@ func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (octobe.Session[B
 		return nil, err
 	}
 
-	return &pgxSession{
+	session := pgxSession{
 		cfg:       cfg,
 		tx:        tx,
 		committed: false,
 		closed:    false,
-	}, nil
+	}
+
+	return octobe.NewSession(&session), nil
 }
 
 // Close closes the connection.
@@ -136,7 +138,7 @@ func (d *pgxConn) Ping(ctx context.Context) error {
 }
 
 // StartTransaction starts a transactional session.
-func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session octobe.BuilderSession[Builder]) error, opts ...Option) (err error) {
+func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session *octobe.Session[Builder]) error, opts ...Option) (err error) {
 	return octobe.StartTransaction[PGXConn](ctx, d, fn, opts...)
 }
 
@@ -150,7 +152,7 @@ type pgxSession struct {
 	closed    bool
 }
 
-var _ octobe.Session[Builder] = &pgxSession{}
+var _ octobe.Backend[Builder] = &pgxSession{}
 
 // Commit commits the transaction. Only works for transactional sessions.
 func (s *pgxSession) Commit(ctx context.Context) error {
