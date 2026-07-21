@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
-	"github.com/Kansuler/octobe/v3/driver/postgres/mock"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/postgres/mock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +29,7 @@ func TestPGXPoolWithTxInsideStartTransaction(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		err := session.ExecuteVoid(ctx, Migration())
 		if !assert.NoError(t, err) {
 			return err
@@ -232,7 +232,7 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		err := session.ExecuteVoid(ctx, Migration())
 		return err
 	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
@@ -258,7 +258,7 @@ func TestPGXPoolWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		_ = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		_ = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 			err := session.ExecuteVoid(ctx, Migration())
 			if err != nil {
 				return err

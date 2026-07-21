@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )

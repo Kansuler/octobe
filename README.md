@@ -1,6 +1,6 @@
 # ![Octobe Logotype](https://raw.github.com/Kansuler/octobe/master/doc/octobe_logo.svg)
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/Kansuler/octobe.svg)](https://pkg.go.dev/github.com/Kansuler/octobe/v3)
+[![GoDoc](https://pkg.go.dev/badge/github.com/Kansuler/octobe/v4.svg)](https://pkg.go.dev/github.com/Kansuler/octobe/v4)
 ![MIT License](https://img.shields.io/github/license/Kansuler/octobe)
 ![Tag](https://img.shields.io/github/v/tag/Kansuler/octobe)
 ![Version](https://img.shields.io/github/go-mod/go-version/Kansuler/octobe)
@@ -18,8 +18,10 @@ Use Octobe when you want:
 ## Quick example
 
 ```bash
-go get github.com/Kansuler/octobe/v3
+go get github.com/Kansuler/octobe/v4
 ```
+
+Octobe v4 requires Go 1.27rc2 or newer because the session API uses generic methods.
 
 ```go
 package users
@@ -28,8 +30,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
 )
 
 type User struct {
@@ -57,7 +59,7 @@ func Signup(ctx context.Context, email string) (User, error) {
 	defer db.Close(ctx)
 
 	var user User
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		var err error
 		user, err = session.Execute(ctx, CreateUser(email))
 		return err
@@ -66,11 +68,11 @@ func Signup(ctx context.Context, email string) (User, error) {
 }
 ```
 
-`StartTransaction` commits when the callback returns `nil`, rolls back when it returns an error, and rolls back before re-panicking on panic.
+`StartTransaction` commits when the callback returns `nil`, rolls back when it returns an error, and rolls back before re-panicking on panic. Its callback receives a `ManagedSession`, which exposes `Execute`, `ExecuteVoid`, and `ExecuteMany` but not `Builder` or manual lifecycle methods such as `Commit`, `Rollback`, and `Close`.
 
 ## What you write
 
-Handlers keep SQL close to the result type:
+Handlers keep SQL close to the result type. The generic execution methods are bound to sessions, so `session.Execute(ctx, handler)` infers its result type from the handler:
 
 ```go
 func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
@@ -102,7 +104,7 @@ func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
 Compose several operations in the same transaction:
 
 ```go
-err := db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+err := db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 	user, err := session.Execute(ctx, CreateUser("alice@example.com"))
 	if err != nil {
 		return err
@@ -112,10 +114,10 @@ err := db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) 
 })
 ```
 
-Use manual sessions when you need to control the lifecycle yourself:
+Use a regular `Session` when you need manual lifecycle or direct builder control. `Begin` creates a non-transactional session; with pgxpool it pins one connection until `Close`:
 
 ```go
-session, err := db.Begin(ctx) // pgxpool: pins one pool connection until Close
+session, err := db.Begin(ctx)
 if err != nil {
 	return err
 }
@@ -123,6 +125,8 @@ defer session.Close(ctx)
 
 user, err := session.Execute(ctx, GetUser(123))
 ```
+
+`BeginTx` returns the same `Session` API, but the caller must finish it with `Commit`, `Rollback`, or `Close`.
 
 ## Why use Octobe instead of another package?
 
@@ -135,8 +139,9 @@ user, err := session.Execute(ctx, GetUser(123))
 
 ## Features
 
-- **Typed handlers**: `octobe.Handler[Result, postgres.Builder]` returns concrete Go types.
+- **Session-bound generic execution**: `Session.Execute` and `ManagedSession.Execute` infer concrete result types from typed handlers.
 - **Automatic transactions**: `StartTransaction` handles begin, commit, rollback, cleanup, and panic rollback.
+- **Restricted managed sessions**: transaction callbacks cannot commit, roll back, close, or access the builder directly.
 - **Manual sessions**: use `Begin` or `BeginTx` when you need explicit lifecycle control.
 - **Raw SQL execution**: `Exec`, `QueryRow`, and callback-based `Query` map directly to pgx-style operations.
 - **PostgreSQL driver**: supports `pgx.Conn`, `pgxpool.Pool`, DSNs, and existing connections/pools.
@@ -180,7 +185,7 @@ Set transaction options when needed:
 ```go
 err := db.StartTransaction(
 	ctx,
-	func(session *octobe.Session[postgres.Builder]) error {
+	func(session *octobe.ManagedSession[postgres.Builder]) error {
 		return session.ExecuteVoid(ctx, RebuildReport())
 	},
 	postgres.WithPGXTxOptions(postgres.PGXTxOptions{IsoLevel: pgx.Serializable}),
@@ -204,7 +209,7 @@ func TestCreateUser(t *testing.T) {
 	pgxMock.ExpectCommit()
 
 	var user User
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		var err error
 		user, err = session.Execute(ctx, CreateUser("alice@example.com"))
 		return err
@@ -229,7 +234,30 @@ docker compose up --abort-on-container-exit
 
 ## Driver development
 
-Drivers implement the Octobe `Driver`, `Session`, and builder contracts. Use the PostgreSQL driver in [`driver/postgres`](driver/postgres/) as the reference implementation.
+A driver implements `octobe.Driver`; it does not implement `octobe.Session` or `octobe.ManagedSession`. Octobe owns those public wrappers.
+
+The driver contracts are:
+
+- **`Open`**: driver constructors return an `octobe.Open` function that creates the configured `Driver`.
+- **`Driver`**: owns the database connection or pool. `Begin` and `BeginTx` create a driver-specific `Backend` and return `octobe.NewSession(backend)`. `Close` and `Ping` operate on the owned resource.
+- **`Backend`**: represents one active session and supplies `Commit`, `Rollback`, `Close`, and `Builder`. A transactional backend must finalize its transaction and release resources; a non-transactional backend must reject commit/rollback and release resources from `Close`.
+- **`Session`**: created by `octobe.NewSession` for callers that own lifecycle. It adds `Execute`, `ExecuteVoid`, and `ExecuteMany` to the backend lifecycle and builder operations.
+- **`ManagedSession`**: created by `octobe.StartTransaction` for managed callbacks. It exposes only the execute methods, leaving commit and rollback to Octobe.
+- **Builder**: the driver-defined value returned by `Backend.Builder` and passed to `Handler` and `VoidHandler` functions.
+
+A driver's `StartTransaction` method can delegate the lifecycle to the package helper:
+
+```go
+func (d *driver) StartTransaction(
+	ctx context.Context,
+	fn func(*octobe.ManagedSession[Builder]) error,
+	opts ...octobe.Option[Config],
+) error {
+	return octobe.StartTransaction[RawDriver](ctx, d, fn, opts...)
+}
+```
+
+Use the PostgreSQL driver in [`driver/postgres`](driver/postgres/) as the reference implementation.
 
 ## License
 

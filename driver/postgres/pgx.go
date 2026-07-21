@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/Kansuler/octobe/v3"
+	"github.com/Kansuler/octobe/v4"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -81,12 +81,11 @@ func OpenPGXWithConn(c PGXConn) PGXOpen {
 	}
 }
 
-// Begin starts a new session, optionally within a transaction if txOptions are provided.
-// Non-transactional sessions execute directly on the underlying pgx connection.
+// Begin starts a non-transactional session on the underlying pgx connection.
 func (d *pgxConn) Begin(ctx context.Context) (*octobe.Session[Builder], error) {
 	return octobe.NewSession(&pgxSession{
 		d: d,
-	}), nil
+	})
 }
 
 // BeginTx starts a new transactional session.
@@ -118,7 +117,7 @@ func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Session[
 		closed:    false,
 	}
 
-	return octobe.NewSession(&session), nil
+	return octobe.NewSession(&session)
 }
 
 // Close closes the connection.
@@ -137,13 +136,13 @@ func (d *pgxConn) Ping(ctx context.Context) error {
 	return d.conn.Ping(ctx)
 }
 
-// StartTransaction starts a transactional session.
-func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session *octobe.Session[Builder]) error, opts ...Option) (err error) {
+// StartTransaction runs fn in a transaction managed by Octobe.
+func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session *octobe.ManagedSession[Builder]) error, opts ...Option) (err error) {
 	return octobe.StartTransaction[PGXConn](ctx, d, fn, opts...)
 }
 
-// pgxSession manages a database session that may be transactional or non-transactional.
-// Not thread-safe - use one session per goroutine.
+// pgxSession implements octobe.Backend for a pgx connection or transaction.
+// It is not safe for concurrent use.
 type pgxSession struct {
 	cfg       Config
 	tx        pgx.Tx

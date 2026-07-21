@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"

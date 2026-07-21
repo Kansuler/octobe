@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
-	"github.com/Kansuler/octobe/v3/driver/postgres/mock"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/postgres/mock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,7 +27,7 @@ func TestPGXWithTxInsideStartTransaction(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		err = session.ExecuteVoid(ctx, Migration())
 		if !assert.NoError(t, err) {
 			t.FailNow()
@@ -232,7 +232,7 @@ func TestPGXWithTxInsideStartTransactionRollbackOnError(t *testing.T) {
 
 	ctx := context.Background()
 	expectedErr := errors.New("something went wrong")
-	err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		err = session.ExecuteVoid(ctx, Migration())
 		if !assert.NoError(t, err) {
 			t.FailNow()
@@ -271,7 +271,7 @@ func TestPGXWithTxInsideStartTransactionRollbackOnPanic(t *testing.T) {
 		assert.NoError(t, m.AllExpectationsMet())
 	}()
 
-	_ = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	_ = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		err = session.ExecuteVoid(ctx, Migration())
 		if !assert.NoError(t, err) {
 			t.FailNow()
@@ -586,7 +586,7 @@ func TestSegmentExecError(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 			err := session.ExecuteVoid(ctx, func(ctx context.Context, builder postgres.Builder) error {
 				query := builder("INSERT")
 				_, err := query.Exec(ctx)
@@ -650,7 +650,7 @@ func TestSegmentQueryRowError(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 			_, err := session.Execute(ctx, func(ctx context.Context, builder postgres.Builder) (Product, error) {
 				var p Product
 				query := builder("SELECT")
@@ -714,7 +714,7 @@ func TestSegmentQueryError(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 			err := session.ExecuteVoid(ctx, func(ctx context.Context, builder postgres.Builder) error {
 				query := builder("SELECT")
 				err := query.Query(ctx, func(rows postgres.Rows) error { return nil })
@@ -775,7 +775,7 @@ func TestSegmentQueryError(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		err = ob.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+		err = ob.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 			err := session.ExecuteVoid(ctx, func(ctx context.Context, builder postgres.Builder) error {
 				query := builder("SELECT")
 				err := query.Query(ctx, func(rows postgres.Rows) error { return expectedErr })

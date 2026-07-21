@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/Kansuler/octobe/v3"
+	"github.com/Kansuler/octobe/v4"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -93,8 +93,7 @@ func OpenPGXWithPool(pool PGXPool) PGXPoolOpen {
 	}
 }
 
-// Begin starts a new session, optionally within a transaction.
-// Non-transactional sessions acquire one pool connection and keep it until Close.
+// Begin starts a non-transactional session that pins one pool connection until Close.
 func (d *pgxpoolConn) Begin(ctx context.Context) (*octobe.Session[Builder], error) {
 	conn, err := d.acquireSession(ctx)
 	if err != nil {
@@ -103,7 +102,7 @@ func (d *pgxpoolConn) Begin(ctx context.Context) (*octobe.Session[Builder], erro
 
 	return octobe.NewSession(&pgxpoolSession{
 		conn: conn,
-	}), nil
+	})
 }
 
 func (d *pgxpoolConn) acquireSession(ctx context.Context) (PGXPoolSessionConn, error) {
@@ -159,7 +158,7 @@ func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Sess
 		tx:        tx,
 		committed: false,
 		closed:    false,
-	}), nil
+	})
 }
 
 // Close releases the pool connection.
@@ -179,12 +178,12 @@ func (d *pgxpoolConn) Ping(ctx context.Context) error {
 	return d.pool.Ping(ctx)
 }
 
-// StartTransaction starts a new transactional session.
-func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session *octobe.Session[Builder]) error, opts ...Option) (err error) {
+// StartTransaction runs fn in a transaction managed by Octobe.
+func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session *octobe.ManagedSession[Builder]) error, opts ...Option) (err error) {
 	return octobe.StartTransaction[PGXPool](ctx, d, fn, opts...)
 }
 
-// pgxpoolSession manages a pooled database session.
+// pgxpoolSession implements octobe.Backend for a pinned pool connection.
 type pgxpoolSession struct {
 	cfg       Config
 	tx        pgx.Tx

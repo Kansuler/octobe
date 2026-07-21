@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
 )
 
 type integrationProduct struct {

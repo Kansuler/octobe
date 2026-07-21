@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 
-	"github.com/Kansuler/octobe/v3"
+	"github.com/Kansuler/octobe/v4"
 	"github.com/jackc/pgx/v5"
 )
 

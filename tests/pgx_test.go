@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -27,14 +27,14 @@ func (s *PGXIntegrationSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.db = openPGXWithRetry(s.T(), s.ctx, integrationDSN(s.T()))
 
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		return session.ExecuteVoid(s.ctx, migrateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
 
 func (s *PGXIntegrationSuite) SetupTest() {
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		return session.ExecuteVoid(s.ctx, truncateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
@@ -45,7 +45,7 @@ func (s *PGXIntegrationSuite) TearDownSuite() {
 		return
 	}
 
-	_ = s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+	_ = s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		return session.ExecuteVoid(s.ctx, dropProducts(pgxProductsTable))
 	})
 	s.Require().NoError(s.db.Close(s.ctx))
@@ -55,7 +55,7 @@ func (s *PGXIntegrationSuite) TestStartTransactionCommits() {
 	name := "pgx committed product"
 	var created integrationProduct
 
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		var err error
 		created, err = session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 		return err
@@ -71,7 +71,7 @@ func (s *PGXIntegrationSuite) TestStartTransactionRollsBackOnError() {
 	name := "pgx rolled back product"
 	expectedErr := errors.New("force rollback")
 
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		_, err := session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 		if err != nil {
 			return err

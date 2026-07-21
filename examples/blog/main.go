@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/Kansuler/octobe/v3"
-	"github.com/Kansuler/octobe/v3/driver/postgres"
+	"github.com/Kansuler/octobe/v4"
+	"github.com/Kansuler/octobe/v4/driver/postgres"
 )
 
 // Domain models
@@ -353,7 +353,7 @@ func (s *BlogService) CreateUserAndWelcomePost(ctx context.Context, username, em
 	var user User
 	var post Post
 
-	err := s.db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err := s.db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		var err error
 
 		// Create user
@@ -384,7 +384,7 @@ func (s *BlogService) GetPostWithComments(ctx context.Context, postID int) (*Pos
 	var post Post
 	var comments []Comment
 
-	err := s.db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err := s.db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		var err error
 
 		post, err = session.Execute(ctx, GetPostWithAuthor(postID))
@@ -435,7 +435,7 @@ func main() {
 	log.Println("Connected to database successfully")
 
 	// Create schema
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		return session.ExecuteVoid(ctx, CreateSchema())
 	})
 	if err != nil {
@@ -457,7 +457,7 @@ func main() {
 
 	// Demo: Create another user
 	var bob User
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		bob, err = session.Execute(ctx, CreateUser("bob", "bob@example.com"))
 		return err
 	})
@@ -467,7 +467,7 @@ func main() {
 	fmt.Printf("Created user: %s (ID: %d)\n", bob.Username, bob.ID)
 
 	// Demo: Create a blog post with tags
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		post, err := session.Execute(ctx, CreatePostWithTags(
 			"Getting Started with Go",
 			"Go is a fantastic programming language for backend development...",
@@ -485,7 +485,7 @@ func main() {
 	}
 
 	// Demo: Add comments
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		comment, err := session.Execute(ctx, CreateComment(welcomePost.ID, bob.ID, "Welcome to the platform, Alice!"))
 		if err != nil {
 			return err
@@ -516,7 +516,7 @@ func main() {
 	}
 
 	// Demo: Get all posts by alice
-	err = db.StartTransaction(ctx, func(session *octobe.Session[postgres.Builder]) error {
+	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
 		posts, err := session.Execute(ctx, GetPostsByAuthor(user.ID))
 		if err != nil {
 			return err

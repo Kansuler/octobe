@@ -1,4 +1,4 @@
-module github.com/Kansuler/octobe/v3
+module github.com/Kansuler/octobe/v4
 
 go 1.27rc2
 
