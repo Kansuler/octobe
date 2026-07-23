@@ -36,7 +36,7 @@ type pgxConn struct {
 var _ PGXDriver = &pgxConn{}
 
 // OpenPGX creates a pgx connection driver from a DSN string.
-func OpenPGX(ctx context.Context, dsn string) PGXOpen {
+func OpenPGX(ctx context.Context, dsn string) octobe.OpenFunc[PGXConn, Config, QueryFactory] {
 	return func() (PGXDriver, error) {
 		conn, err := pgx.Connect(ctx, dsn)
 		if err != nil {
@@ -54,8 +54,8 @@ type ParseConfigOptions struct {
 	pgconn.ParseConfigOptions
 }
 
-// OpenPGXWithOptions creates a pgx connection driver with custom parse options.
-func OpenPGXWithOptions(ctx context.Context, dsn string, options ParseConfigOptions) PGXOpen {
+// OpenPGXWithParseConfigOptions creates a pgx connection driver with custom parse options.
+func OpenPGXWithParseConfigOptions(ctx context.Context, dsn string, options ParseConfigOptions) octobe.OpenFunc[PGXConn, Config, QueryFactory] {
 	return func() (PGXDriver, error) {
 		conn, err := pgx.ConnectWithOptions(ctx, dsn, pgx.ParseConfigOptions{ParseConfigOptions: options.ParseConfigOptions})
 		if err != nil {
@@ -69,27 +69,27 @@ func OpenPGXWithOptions(ctx context.Context, dsn string, options ParseConfigOpti
 }
 
 // OpenPGXWithConn creates a driver from an existing pgx connection.
-func OpenPGXWithConn(c PGXConn) PGXOpen {
+func OpenPGXWithConn(conn PGXConn) octobe.OpenFunc[PGXConn, Config, QueryFactory] {
 	return func() (PGXDriver, error) {
-		if c == nil {
+		if conn == nil {
 			return nil, errors.New("conn is nil")
 		}
 
 		return &pgxConn{
-			conn: c,
+			conn: conn,
 		}, nil
 	}
 }
 
-// Begin starts a non-transactional session on the underlying pgx connection.
-func (d *pgxConn) Begin(ctx context.Context) (*octobe.Session[Builder], error) {
+// OpenSession opens a non-transactional session on the underlying pgx connection.
+func (d *pgxConn) Session(ctx context.Context) (*octobe.Session[QueryFactory], error) {
 	return octobe.NewSession(&pgxSession{
 		d: d,
 	})
 }
 
 // BeginTx starts a new transactional session.
-func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Session[Builder], error) {
+func (d *pgxConn) Transaction(ctx context.Context, opts ...Option) (*octobe.SessionTransaction[QueryFactory], error) {
 	var cfg Config
 	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
@@ -110,14 +110,12 @@ func (d *pgxConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Session[
 		return nil, err
 	}
 
-	session := pgxSession{
+	return octobe.NewTransaction(&pgxSession{
 		cfg:       cfg,
 		tx:        tx,
 		committed: false,
 		closed:    false,
-	}
-
-	return octobe.NewSession(&session)
+	})
 }
 
 // Close closes the connection.
@@ -136,9 +134,9 @@ func (d *pgxConn) Ping(ctx context.Context) error {
 	return d.conn.Ping(ctx)
 }
 
-// StartTransaction runs fn in a transaction managed by Octobe.
-func (d *pgxConn) StartTransaction(ctx context.Context, fn func(session *octobe.ManagedSession[Builder]) error, opts ...Option) (err error) {
-	return octobe.StartTransaction[PGXConn](ctx, d, fn, opts...)
+// RunInTransaction runs fn in a transaction managed by Octobe.
+func (d *pgxConn) RunInTransaction(ctx context.Context, fn func(session *octobe.SessionManaged[QueryFactory]) error, opts ...Option) (err error) {
+	return octobe.RunInTransaction[PGXConn](ctx, d, fn, opts...)
 }
 
 // pgxSession implements octobe.Backend for a pgx connection or transaction.
@@ -151,7 +149,7 @@ type pgxSession struct {
 	closed    bool
 }
 
-var _ octobe.Backend[Builder] = &pgxSession{}
+var _ octobe.Backend[QueryFactory] = &pgxSession{}
 
 // Commit commits the transaction. Only works for transactional sessions.
 func (s *pgxSession) Commit(ctx context.Context) error {
@@ -199,10 +197,10 @@ func (s *pgxSession) Close(ctx context.Context) error {
 	return nil
 }
 
-// Builder returns a query builder function for this session.
-func (s *pgxSession) Builder() Builder {
-	return func(query string) Segment {
-		return &pgxSegment{
+// QueryFactory returns a query factory for this session.
+func (s *pgxSession) QueryFactory() QueryFactory {
+	return func(query string) Statement {
+		return &pgxStatement{
 			query:   query,
 			args:    nil,
 			used:    false,
@@ -211,38 +209,38 @@ func (s *pgxSession) Builder() Builder {
 	}
 }
 
-// pgxSegment represents a single-use query with arguments and execution tracking.
-type pgxSegment struct {
+// pgxStatement represents a single-use query with arguments and execution tracking.
+type pgxStatement struct {
 	query   string
 	args    []any
 	used    bool
 	session *pgxSession
 }
 
-var _ Segment = &pgxSegment{}
+var _ Statement = &pgxStatement{}
 
-func (s *pgxSegment) use() {
+func (s *pgxStatement) use() {
 	s.used = true
 }
 
-// activeSession returns the session associated with this segment, or an error if it is closed.
-func (s *pgxSegment) activeSession() (*pgxSession, error) {
+// activeSession returns the session associated with this statement, or an error if it is closed.
+func (s *pgxStatement) activeSession() (*pgxSession, error) {
 	if s.session == nil || s.session.closed {
 		return nil, errors.New("session is closed")
 	}
 	return s.session, nil
 }
 
-// Arguments sets query parameters and returns the segment for method chaining.
-func (s *pgxSegment) Arguments(args ...any) Segment {
+// WithArgs sets query parameters and returns the statement for method chaining.
+func (s *pgxStatement) WithArgs(args ...any) Statement {
 	s.args = args
 	return s
 }
 
 // Exec executes the query and returns the number of affected rows.
-func (s *pgxSegment) Exec(ctx context.Context) (ExecResult, error) {
+func (s *pgxStatement) Exec(ctx context.Context) (ExecResult, error) {
 	if s.used {
-		return ExecResult{}, octobe.ErrAlreadyUsed
+		return ExecResult{}, octobe.ErrStatementAlreadyExecuted
 	}
 	defer s.use()
 	session, err := s.activeSession()
@@ -270,9 +268,9 @@ func (s *pgxSegment) Exec(ctx context.Context) (ExecResult, error) {
 }
 
 // QueryRow executes the query expecting exactly one row and scans into dest.
-func (s *pgxSegment) QueryRow(ctx context.Context, dest ...any) error {
+func (s *pgxStatement) QueryRow(ctx context.Context, dest ...any) error {
 	if s.used {
-		return octobe.ErrAlreadyUsed
+		return octobe.ErrStatementAlreadyExecuted
 	}
 	defer s.use()
 	session, err := s.activeSession()
@@ -285,10 +283,10 @@ func (s *pgxSegment) QueryRow(ctx context.Context, dest ...any) error {
 	return session.tx.QueryRow(ctx, s.query, s.args...).Scan(dest...)
 }
 
-// Query executes the query and calls cb for each row in the result set.
-func (s *pgxSegment) Query(ctx context.Context, cb func(Rows) error) error {
+// Query executes the query and passes the result set to handleRows.
+func (s *pgxStatement) Query(ctx context.Context, handleRows func(Rows) error) error {
 	if s.used {
-		return octobe.ErrAlreadyUsed
+		return octobe.ErrStatementAlreadyExecuted
 	}
 	defer s.use()
 
@@ -311,7 +309,7 @@ func (s *pgxSegment) Query(ctx context.Context, cb func(Rows) error) error {
 	}
 
 	defer rows.Close()
-	if err = cb(rows); err != nil {
+	if err = handleRows(rows); err != nil {
 		return err
 	}
 

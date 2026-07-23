@@ -12,7 +12,7 @@ Use Octobe when you want:
 
 - raw SQL, not an ORM model layer
 - one transaction API for create/read/update flows
-- reusable, typed database operations with http-like handlers
+- reusable, typed database operations with HTTP-style handlers
 - pgx/pgxpool support
 
 ## Quick example
@@ -21,10 +21,10 @@ Use Octobe when you want:
 go get github.com/Kansuler/octobe/v4
 ```
 
-Octobe v4 requires Go 1.27rc2 or newer because the session API uses generic methods.
+Octobe v4 requires Go 1.27 or newer because it uses generic methods.
 
 ```go
-package users
+package main
 
 import (
 	"context"
@@ -39,53 +39,81 @@ type User struct {
 	Email string
 }
 
-const insertUserSQL = `INSERT INTO users (email) VALUES ($1) RETURNING id, email`
-
-func CreateUser(email string) octobe.Handler[User, postgres.Builder] {
-	return func(ctx context.Context, sql postgres.Builder) (User, error) {
+func CreateUser(email string) octobe.Handler[User, postgres.QueryFactory] {
+	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
 		var user User
-		err := sql(insertUserSQL).
-			Arguments(email).
+		err := query(`INSERT INTO users (email) VALUES ($1) RETURNING id, email`).
+			WithArgs(email).
 			QueryRow(ctx, &user.ID, &user.Email)
 		return user, err
 	}
 }
 
-func Signup(ctx context.Context, email string) (User, error) {
+func main() {
 	db, err := octobe.New(postgres.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
 	if err != nil {
 		return User{}, err
 	}
-	defer db.Close(ctx)
+	defer func() { _ = db.Close(ctx) }()
 
-	var user User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
+	// Start a session without a transaction
+	session, err := db.Session(ctx)
+	if err != nil {
+		return User{}, err
+	}
+	defer func() { _ = session.Close(ctx) }()
+
+  user, err := session.Execute(ctx, CreateUser("email@octobe.invalid"))
+  if err != nil {
+    return User{}, err
+  }
+
+	// Run a transaction
+  tx, err := session.Transaction(ctx)
+  if err != nil {
+    return User{}, err
+  }
+  defer func() { _ = tx.Rollback(ctx) }()
+
+  user, err = tx.Execute(ctx, CreateUser("email@octobe.invalid"))
+  if err != nil {
+    return User{}, err
+  }
+
+  err = tx.Commit(ctx)
+  if err != nil {
+    return User{}, err
+  }
+
+	// Fully managed transaction, if it returns an error, the transaction is rolled back. Otherwise, it is committed.
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
 		var err error
 		user, err = session.Execute(ctx, CreateUser(email))
 		return err
 	})
+
 	return user, err
 }
 ```
 
-`StartTransaction` commits when the callback returns `nil`, rolls back when it returns an error, and rolls back before re-panicking on panic. Its callback receives a `ManagedSession`, which exposes `Execute`, `ExecuteVoid`, and `ExecuteMany` but not `Builder` or manual lifecycle methods such as `Commit`, `Rollback`, and `Close`.
+`RunInTransaction` commits when the callback returns `nil`, rolls back when it returns an error, and rolls back before re-panicking on panic. Its callback receives a `SessionManaged`, which exposes `Execute`, `ExecuteNoResult`, and `ExecuteSequence`, but no direct query-factory or lifecycle methods.
 
 ## What you write
 
-Handlers keep SQL close to the result type. The generic execution methods are bound to sessions, so `session.Execute(ctx, handler)` infers its result type from the handler:
+Handlers keep SQL close to the result type. The result type parameter belongs to the execution method, so `session.Execute(ctx, handler)` infers `R` from `Handler[R, QF]`:
 
 ```go
-func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
-	return func(ctx context.Context, sql postgres.Builder) ([]User, error) {
-		query := sql(`
+func UsersByDomain(domain string) octobe.Handler[[]User, postgres.QueryFactory] {
+	return func(ctx context.Context, query postgres.QueryFactory) ([]User, error) {
+		var users []User
+		err := query(`
 			SELECT id, email
 			FROM users
 			WHERE email LIKE $1
 			ORDER BY id
-		`)
-
-		var users []User
-		err := query.Arguments("%@" + domain).Query(ctx, func(rows postgres.Rows) error {
+		`).
+		WithArgs("%@" + domain).
+		Query(ctx, func(rows postgres.Rows) error {
 			for rows.Next() {
 				var user User
 				if err := rows.Scan(&user.ID, &user.Email); err != nil {
@@ -101,32 +129,56 @@ func UsersByDomain(domain string) octobe.Handler[[]User, postgres.Builder] {
 }
 ```
 
+`ExecuteSequence` uses the same inference and runs handlers that return the same result type in order, and returns a slice of results.
+
+```go
+created, err := session.ExecuteSequence(ctx,
+	CreateUser("alice@example.com"),
+	CreateUser("bob@example.com"),
+)
+```
+
+`ExecuteSequence` does not start a transaction. Run it on a `SessionManaged` or `SessionTransaction` when the sequence must share a transaction.
+
 Compose several operations in the same transaction:
 
 ```go
-err := db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
+err := db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
 	user, err := session.Execute(ctx, CreateUser("alice@example.com"))
 	if err != nil {
 		return err
 	}
 
-	return session.ExecuteVoid(ctx, CreateAuditEvent(user.ID, "signup"))
+	return session.ExecuteNoResult(ctx, CreateAuditEvent(user.ID, "signup"))
 })
 ```
 
-Use a regular `Session` when you need manual lifecycle or direct builder control. `Begin` creates a non-transactional session; with pgxpool it pins one connection until `Close`:
+Use `Session` for a non-transactional session with explicit lifecycle control. With pgxpool it pins one connection until `Close`:
 
 ```go
-session, err := db.Begin(ctx)
+session, err := db.Session(ctx)
 if err != nil {
 	return err
 }
-defer session.Close(ctx)
+defer func() { _ = session.Close(ctx) }()
 
-user, err := session.Execute(ctx, GetUser(123))
+user, err := session.Execute(ctx, GetUserByID(123))
 ```
 
-`BeginTx` returns the same `Session` API, but the caller must finish it with `Commit`, `Rollback`, or `Close`.
+Use `Transaction` for manual transaction control. It returns a `SessionTransaction`, which exposes the three execution methods plus `Commit` and `Rollback`:
+
+```go
+tx, err := db.Transaction(ctx)
+if err != nil {
+	return err
+}
+defer func() { _ = tx.Rollback(ctx) }()
+
+if err := tx.ExecuteNoResult(ctx, CreateAuditEvent(123, "manual")); err != nil {
+	return err
+}
+return tx.Commit(ctx)
+```
 
 ## Why use Octobe instead of another package?
 
@@ -139,14 +191,14 @@ user, err := session.Execute(ctx, GetUser(123))
 
 ## Features
 
-- **Session-bound generic execution**: `Session.Execute` and `ManagedSession.Execute` infer concrete result types from typed handlers.
-- **Automatic transactions**: `StartTransaction` handles begin, commit, rollback, cleanup, and panic rollback.
-- **Restricted managed sessions**: transaction callbacks cannot commit, roll back, close, or access the builder directly.
-- **Manual sessions**: use `Begin` or `BeginTx` when you need explicit lifecycle control.
+- **Session-bound generic execution**: `Session.Execute`, `SessionManaged.Execute`, and `SessionTransaction.Execute` infer concrete result types from typed handlers; each session type also exposes `ExecuteNoResult` and `ExecuteSequence`.
+- **Automatic transactions**: `RunInTransaction` handles begin, commit, and rollback, including rollback before re-panicking.
+- **Restricted managed sessions**: transaction callbacks cannot commit, roll back, close, or directly access the query factory.
+- **Explicit lifecycle APIs**: use `Session` for an explicitly closed non-transactional session, or `Transaction` for manual commit/rollback.
 - **Raw SQL execution**: `Exec`, `QueryRow`, and callback-based `Query` map directly to pgx-style operations.
 - **PostgreSQL driver**: supports `pgx.Conn`, `pgxpool.Pool`, DSNs, and existing connections/pools.
 - **Testing mocks**: `driver/postgres/mock` lets tests expect queries, rows, transactions, commits, rollbacks, and pool behavior.
-- **Single-use query segments**: a query segment can only execute once, preventing accidental reuse.
+- **Single-use statements**: a statement can only execute once, preventing accidental reuse.
 
 ## What Octobe is not
 
@@ -183,10 +235,10 @@ db, err := octobe.New(postgres.OpenPGXWithPool(pool))
 Set transaction options when needed:
 
 ```go
-err := db.StartTransaction(
+err := db.RunInTransaction(
 	ctx,
-	func(session *octobe.ManagedSession[postgres.Builder]) error {
-		return session.ExecuteVoid(ctx, RebuildReport())
+	func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+		return session.ExecuteNoResult(ctx, RebuildReport())
 	},
 	postgres.WithPGXTxOptions(postgres.PGXTxOptions{IsoLevel: pgx.Serializable}),
 )
@@ -197,7 +249,7 @@ err := db.StartTransaction(
 ```go
 func TestCreateUser(t *testing.T) {
 	ctx := context.Background()
-	pgxMock := mock.NewPGXPoolMock()
+	pgxMock := mock.NewPGXPool()
 
 	db, err := octobe.New(postgres.OpenPGXWithPool(pgxMock))
 	require.NoError(t, err)
@@ -209,7 +261,7 @@ func TestCreateUser(t *testing.T) {
 	pgxMock.ExpectCommit()
 
 	var user User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
 		var err error
 		user, err = session.Execute(ctx, CreateUser("alice@example.com"))
 		return err
@@ -234,26 +286,27 @@ docker compose up --abort-on-container-exit
 
 ## Driver development
 
-A driver implements `octobe.Driver`; it does not implement `octobe.Session` or `octobe.ManagedSession`. Octobe owns those public wrappers.
+A driver implements `octobe.Driver`;
 
 The driver contracts are:
 
-- **`Open`**: driver constructors return an `octobe.Open` function that creates the configured `Driver`.
-- **`Driver`**: owns the database connection or pool. `Begin` and `BeginTx` create a driver-specific `Backend` and return `octobe.NewSession(backend)`. `Close` and `Ping` operate on the owned resource.
-- **`Backend`**: represents one active session and supplies `Commit`, `Rollback`, `Close`, and `Builder`. A transactional backend must finalize its transaction and release resources; a non-transactional backend must reject commit/rollback and release resources from `Close`.
-- **`Session`**: created by `octobe.NewSession` for callers that own lifecycle. It adds `Execute`, `ExecuteVoid`, and `ExecuteMany` to the backend lifecycle and builder operations.
-- **`ManagedSession`**: created by `octobe.StartTransaction` for managed callbacks. It exposes only the execute methods, leaving commit and rollback to Octobe.
-- **Builder**: the driver-defined value returned by `Backend.Builder` and passed to `Handler` and `VoidHandler` functions.
+- **`OpenFunc`**: driver constructors return an `octobe.OpenFunc` that creates the configured `Driver`.
+- **`Driver`**: owns the database connection or pool. `Session` creates a non-transactional backend and wraps it with `octobe.NewSession`; `Transaction` creates a transactional backend and wraps it with `octobe.NewTransaction`. `Close` and `Ping` operate on the owned resource.
+- **`Backend`**: represents one active driver session and supplies `Commit`, `Rollback`, `Close`, and `QueryFactory` to Octobe's wrappers.
+- **`Session`**: exposes `Close`, `Execute`, `ExecuteNoResult`, and `ExecuteSequence`. Handlers receive the backend query factory internally.
+- **`SessionTransaction`**: exposes `Commit`, `Rollback`, and the three execution methods.
+- **`SessionManaged`**: created by `octobe.NewSessionManaged` inside `octobe.RunInTransaction`. It exposes only the three execution methods, leaving transaction lifecycle to Octobe.
+- **`QueryFactory`**: the driver-defined value returned by `Backend.QueryFactory` and passed to `Handler` and `NoResultHandler` functions.
 
-A driver's `StartTransaction` method can delegate the lifecycle to the package helper:
+A driver's `RunInTransaction` method can delegate lifecycle to the package helper. Pass the driver's underlying resource type as the first type argument, as the PostgreSQL pool driver does with `PGXPool`:
 
 ```go
-func (d *driver) StartTransaction(
+func (d *pgxpoolConn) RunInTransaction(
 	ctx context.Context,
-	fn func(*octobe.ManagedSession[Builder]) error,
-	opts ...octobe.Option[Config],
+	fn func(*octobe.SessionManaged[QueryFactory]) error,
+	opts ...Option,
 ) error {
-	return octobe.StartTransaction[RawDriver](ctx, d, fn, opts...)
+	return octobe.RunInTransaction[PGXPool](ctx, d, fn, opts...)
 }
 ```
 

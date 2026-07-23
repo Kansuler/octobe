@@ -20,86 +20,58 @@ type User struct {
 }
 
 // Create table handler
-func CreateUsersTable() octobe.VoidHandler[postgres.Builder] {
-	return func(ctx context.Context, builder postgres.Builder) error {
-		query := builder(`
+func EnsureUsersTable() octobe.NoResultHandler[postgres.QueryFactory] {
+	return func(ctx context.Context, query postgres.QueryFactory) error {
+		_, err := query(`
 			CREATE TABLE IF NOT EXISTS users (
 				id SERIAL PRIMARY KEY,
 				name VARCHAR(100) NOT NULL,
 				email VARCHAR(100) UNIQUE NOT NULL
-			)`)
-		_, err := query.Exec(ctx)
+			)`).Exec(ctx)
 		return err
 	}
 }
 
 // Create user handler
-func CreateUser(name, email string) octobe.Handler[User, postgres.Builder] {
-	return func(ctx context.Context, builder postgres.Builder) (User, error) {
+func CreateUser(name, email string) octobe.Handler[User, postgres.QueryFactory] {
+	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
 		var user User
-		query := builder(`
+		err := query(`
 			INSERT INTO users (name, email)
 			VALUES ($1, $2)
-			RETURNING id, name, email`)
-		err := query.Arguments(name, email).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
+			RETURNING id, name, email`).
+			WithArgs(name, email).
+			QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 		return user, err
 	}
 }
 
 // Get user by ID handler
-func GetUser(id int) octobe.Handler[User, postgres.Builder] {
-	return func(ctx context.Context, builder postgres.Builder) (User, error) {
+func GetUserByID(id int) octobe.Handler[User, postgres.QueryFactory] {
+	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
 		var user User
-		query := builder(`
+		err := query(`
 			SELECT id, name, email
 			FROM users
-			WHERE id = $1`)
-		err := query.Arguments(id).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
+			WHERE id = $1`).
+			WithArgs(id).
+			QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 		return user, err
 	}
 }
 
 // Update user handler
-func UpdateUser(id int, name, email string) octobe.Handler[User, postgres.Builder] {
-	return func(ctx context.Context, builder postgres.Builder) (User, error) {
+func UpdateUser(id int, name, email string) octobe.Handler[User, postgres.QueryFactory] {
+	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
 		var user User
-		query := builder(`
+		err := query(`
 			UPDATE users
 			SET name = $1, email = $2
 			WHERE id = $3
-			RETURNING id, name, email`)
-		err := query.Arguments(name, email, id).QueryRow(ctx, &user.ID, &user.Name, &user.Email)
+			RETURNING id, name, email`).
+			WithArgs(name, email, id).
+			QueryRow(ctx, &user.ID, &user.Name, &user.Email)
 		return user, err
-	}
-}
-
-// Delete user handler
-func DeleteUser(id int) octobe.VoidHandler[postgres.Builder] {
-	return func(ctx context.Context, builder postgres.Builder) error {
-		query := builder(`DELETE FROM users WHERE id = $1`)
-		_, err := query.Arguments(id).Exec(ctx)
-		return err
-	}
-}
-
-// List all users handler
-func ListUsers() octobe.Handler[[]User, postgres.Builder] {
-	return func(ctx context.Context, builder postgres.Builder) ([]User, error) {
-		query := builder(`SELECT id, name, email FROM users ORDER BY id`)
-
-		var users []User
-		err := query.Query(ctx, func(rows postgres.Rows) error {
-			for rows.Next() {
-				var user User
-				if err := rows.Scan(&user.ID, &user.Name, &user.Email); err != nil {
-					return err
-				}
-				users = append(users, user)
-			}
-			return rows.Err()
-		})
-
-		return users, err
 	}
 }
 
@@ -130,96 +102,67 @@ func main() {
 	}
 	fmt.Println("✓ Connected to database")
 
-	// Step 3: Create table (in a transaction)
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		return session.ExecuteVoid(ctx, CreateUsersTable())
+	var users []User
+	// Create users in a managed transaction, the transaction is rolled back if any error occurs and
+	// committed otherwise.
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+		// Step 3: Create table (in a transaction)
+		err := session.ExecuteNoResult(ctx, EnsureUsersTable())
+		if err != nil {
+			return err
+		}
+
+		// Step 4: Create a user
+		users, err = session.ExecuteSequence(ctx,
+			CreateUser("Alice Smith", "alice@example.com"),
+			CreateUser("Bob Jones", "bob@example.com"),
+		)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 	if err != nil {
 		log.Fatalf("Failed to create table: %v", err)
 	}
 	fmt.Println("✓ Created users table")
 
-	// Step 4: Create a user
-	var alice User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		alice, err = session.Execute(ctx, CreateUser("Alice Smith", "alice@example.com"))
-		return err
-	})
+	// Open a non-transactional session to retrieve the user
+	session, err := db.Session(ctx)
 	if err != nil {
-		log.Fatalf("Failed to create user: %v", err)
+		log.Fatalf("Failed to open session: %v", err)
 	}
-	fmt.Printf("✓ Created user: %s (ID: %d)\n", alice.Name, alice.ID)
+	defer session.Close(ctx) // release acquired conn from pgx pool
 
-	// Step 5: Create another user
-	var bob User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		bob, err = session.Execute(ctx, CreateUser("Bob Jones", "bob@example.com"))
-		return err
-	})
-	if err != nil {
-		log.Fatalf("Failed to create user: %v", err)
-	}
-	fmt.Printf("✓ Created user: %s (ID: %d)\n", bob.Name, bob.ID)
-
-	// Step 6: Read user back
-	var retrievedUser User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		retrievedUser, err = session.Execute(ctx, GetUser(alice.ID))
-		return err
-	})
+	// Retrieve the user
+	alice, err := session.Execute(ctx, GetUserByID(users[0].ID))
 	if err != nil {
 		log.Fatalf("Failed to get user: %v", err)
 	}
-	fmt.Printf("✓ Retrieved user: %s <%s>\n", retrievedUser.Name, retrievedUser.Email)
+	fmt.Printf("✓ Retrieved user: %s <%s>\n", alice.Name, alice.Email)
 
-	// Step 7: Update user
-	var updatedUser User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		updatedUser, err = session.Execute(ctx, UpdateUser(alice.ID, "Alice Johnson", "alice.johnson@example.com"))
-		return err
-	})
+	// Open a transaction to update the user
+	tx, err := db.Transaction(ctx)
+	if err != nil {
+		log.Fatalf("Failed to start transaction: %v", err)
+	}
+	defer tx.Rollback(ctx) // rollback if commit fails, rollback is no-op if commit succeeds
+
+	alice, err = tx.Execute(ctx, UpdateUser(alice.ID, "Alice Johnson", "alice.johnson@example.com"))
 	if err != nil {
 		log.Fatalf("Failed to update user: %v", err)
 	}
-	fmt.Printf("✓ Updated user: %s <%s>\n", updatedUser.Name, updatedUser.Email)
+	fmt.Printf("✓ Updated user: %s <%s>\n", alice.Name, alice.Email)
 
-	// Step 8: List all users
-	var users []User
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		users, err = session.Execute(ctx, ListUsers())
-		return err
-	})
-	if err != nil {
-		log.Fatalf("Failed to list users: %v", err)
+	if err := tx.Commit(ctx); err != nil {
+		log.Fatalf("Failed to commit transaction: %v", err)
 	}
-	fmt.Printf("✓ Found %d users:\n", len(users))
-	for _, user := range users {
-		fmt.Printf("  - %s <%s> (ID: %d)\n", user.Name, user.Email, user.ID)
-	}
-
-	// Step 9: Delete a user
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		return session.ExecuteVoid(ctx, DeleteUser(bob.ID))
-	})
-	if err != nil {
-		log.Fatalf("Failed to delete user: %v", err)
-	}
-	fmt.Printf("✓ Deleted user with ID: %d\n", bob.ID)
-
-	// Step 10: Verify deletion
-	err = db.StartTransaction(ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		users, err = session.Execute(ctx, ListUsers())
-		return err
-	})
-	if err != nil {
-		log.Fatalf("Failed to list users after deletion: %v", err)
-	}
-	fmt.Printf("✓ Users remaining: %d\n", len(users))
 
 	fmt.Println("\n🎉 Simple example completed successfully!")
 	fmt.Println("\nKey concepts demonstrated:")
 	fmt.Println("• Handler pattern for encapsulating SQL operations")
-	fmt.Println("• Automatic transaction management with StartTransaction")
+	fmt.Println("• Automatic transaction management with RunInTransaction")
 	fmt.Println("• Type-safe query results")
 	fmt.Println("• CRUD operations (Create, Read, Update, Delete)")
 	fmt.Println("• Error handling with automatic rollback")

@@ -8,24 +8,21 @@ import (
 )
 
 type (
-	// PGXDriver is the driver interface returned by OpenPGX, OpenPGXWithOptions, and OpenPGXWithConn.
-	PGXDriver = octobe.Driver[PGXConn, Config, Builder]
+	// PGXDriver is the driver interface returned by OpenPGX, OpenPGXWithParseConfigOptions, and OpenPGXWithConn.
+	PGXDriver = octobe.Driver[PGXConn, Config, QueryFactory]
 
 	// PGXPoolDriver is the driver interface returned by OpenPGXPool and OpenPGXWithPool.
-	PGXPoolDriver = octobe.Driver[PGXPool, Config, Builder]
+	PGXPoolDriver = octobe.Driver[PGXPool, Config, QueryFactory]
 
-	// PGXOpen opens a single-connection PostgreSQL driver.
-	PGXOpen = octobe.Open[PGXConn, Config, Builder]
-
-	// PGXPoolOpen opens a pooled PostgreSQL driver.
-	PGXPoolOpen = octobe.Open[PGXPool, Config, Builder]
+	// PGXPoolOpenFunc opens a pooled PostgreSQL driver.
+	PGXPoolOpenFunc = octobe.OpenFunc[PGXPool, Config, QueryFactory]
 
 	// Option configures PostgreSQL driver behavior.
 	Option = octobe.Option[Config]
 )
 
-// Builder constructs executable query segments from SQL strings.
-type Builder func(query string) Segment
+// QueryFactory constructs executable statements from SQL strings.
+type QueryFactory func(query string) Statement
 
 // PGXTxOptions configures transaction behavior and isolation levels.
 type PGXTxOptions pgx.TxOptions
@@ -54,34 +51,34 @@ func transactionOptions(opts []Option) []Option {
 	return txOpts
 }
 
-// Segment represents a prepared query with arguments that can be executed once.
-// Once executed, the segment becomes invalid and cannot be reused.
+// Statement represents a single-use SQL statement with arguments.
+// Once executed, the statement becomes invalid and cannot be reused.
 //
 // The single-use nature prevents accidental query reuse and ensures predictable behavior.
-// To execute the same query multiple times, create new segments each time.
+// To execute the same query multiple times, create new statements each time.
 //
 // Method chaining example:
 //
-//	result, err := builder(`INSERT INTO users (name) VALUES ($1) RETURNING id`)
-//	    .Arguments("Alice")
+//	err := newQuery(`INSERT INTO users (name) VALUES ($1) RETURNING id`)
+//	    .WithArgs("Alice")
 //	    .QueryRow(ctx, &userID)
 //
 // Multiple operations example:
 //
 //	// First query
-//	err := builder(`UPDATE users SET name = $1 WHERE id = $2`)
-//	    .Arguments("Alice", 123)
+//	err := newQuery(`UPDATE users SET name = $1 WHERE id = $2`)
+//	    .WithArgs("Alice", 123)
 //	    .QueryRow(ctx)
 //
-//	// Second query (new segment required)
-//	err = builder(`DELETE FROM sessions WHERE user_id = $1`)
-//	    .Arguments(123)
+//	// Second query (new statement required)
+//	_, err = newQuery(`DELETE FROM sessions WHERE user_id = $1`)
+//	    .WithArgs(123)
 //	    .Exec(ctx)
-type Segment interface {
-	Arguments(args ...any) Segment
+type Statement interface {
+	WithArgs(args ...any) Statement
 	Exec(ctx context.Context) (ExecResult, error)
 	QueryRow(ctx context.Context, dest ...any) error
-	Query(ctx context.Context, cb func(Rows) error) error
+	Query(ctx context.Context, handleRows func(Rows) error) error
 }
 
 // ExecResult contains the outcome of an INSERT, UPDATE, or DELETE operation.

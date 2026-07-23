@@ -13,25 +13,25 @@ import (
 
 var ErrNoExpectation = errors.New("no expectation found")
 
-// PGXMock provides a mock implementation of postgres.PGXConn and pgx.Tx interfaces
+// PGXConn provides a mock implementation of postgres.PGXConn and pgx.Tx interfaces
 // for testing database interactions without requiring an actual database connection.
-type PGXMock struct {
+type PGXConn struct {
 	mu           sync.Mutex
 	expectations []expectation
 }
 
 var (
-	_ postgres.PGXConn = (*PGXMock)(nil)
-	_ pgx.Tx           = (*PGXMock)(nil)
+	_ postgres.PGXConn = (*PGXConn)(nil)
+	_ pgx.Tx           = (*PGXConn)(nil)
 )
 
-// NewPGXMock creates a new mock database connection for testing.
-func NewPGXMock() *PGXMock {
-	return &PGXMock{}
+// NewPGXConn creates a new mock database connection for testing.
+func NewPGXConn() *PGXConn {
+	return &PGXConn{}
 }
 
 // findExpectation locates the first unfulfilled expectation matching the method and arguments.
-func (m *PGXMock) findExpectation(method string, args ...any) (expectation, error) {
+func (m *PGXConn) findExpectation(method string, args ...any) (expectation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -49,7 +49,7 @@ func (m *PGXMock) findExpectation(method string, args ...any) (expectation, erro
 }
 
 // AllExpectationsMet verifies that all configured expectations have been fulfilled.
-func (m *PGXMock) AllExpectationsMet() error {
+func (m *PGXConn) AllExpectationsMet() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, e := range m.expectations {
@@ -60,13 +60,13 @@ func (m *PGXMock) AllExpectationsMet() error {
 	return nil
 }
 
-func (m *PGXMock) ExpectPing() *PingExpectation {
+func (m *PGXConn) ExpectPing() *PingExpectation {
 	e := &PingExpectation{basicExpectation: basicExpectation{method: "Ping"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXMock) Ping(ctx context.Context) error {
+func (m *PGXConn) Ping(ctx context.Context) error {
 	e, err := m.findExpectation("Ping")
 	if err != nil {
 		return err
@@ -78,13 +78,13 @@ func (m *PGXMock) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (m *PGXMock) ExpectClose() *CloseExpectation {
+func (m *PGXConn) ExpectClose() *CloseExpectation {
 	e := &CloseExpectation{basicExpectation: basicExpectation{method: "Close"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXMock) Close(ctx context.Context) error {
+func (m *PGXConn) Close(ctx context.Context) error {
 	e, err := m.findExpectation("Close")
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (m *PGXMock) Close(ctx context.Context) error {
 }
 
 // ExpectExec configures an expectation for an Exec operation with the specified query.
-func (m *PGXMock) ExpectExec(query string) *ExecExpectation {
+func (m *PGXConn) ExpectExec(query string) *ExecExpectation {
 	e := &ExecExpectation{
 		basicExpectation: basicExpectation{
 			method:     "Exec",
@@ -109,7 +109,7 @@ func (m *PGXMock) ExpectExec(query string) *ExecExpectation {
 	return e
 }
 
-func (m *PGXMock) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+func (m *PGXConn) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
 	e, err := m.findExpectation("Exec", append([]any{query}, args...)...)
 	if err != nil {
 		return pgconn.CommandTag{}, err
@@ -122,7 +122,7 @@ func (m *PGXMock) Exec(ctx context.Context, query string, args ...any) (pgconn.C
 }
 
 // ExpectQuery configures an expectation for a Query operation with the specified query.
-func (m *PGXMock) ExpectQuery(query string) *QueryExpectation {
+func (m *PGXConn) ExpectQuery(query string) *QueryExpectation {
 	e := &QueryExpectation{
 		basicExpectation: basicExpectation{
 			method:     "Query",
@@ -134,7 +134,7 @@ func (m *PGXMock) ExpectQuery(query string) *QueryExpectation {
 	return e
 }
 
-func (m *PGXMock) Query(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
+func (m *PGXConn) Query(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
 	e, err := m.findExpectation("Query", append([]any{query}, args...)...)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (m *PGXMock) Query(ctx context.Context, query string, args ...any) (pgx.Row
 }
 
 // ExpectQueryRow configures an expectation for a QueryRow operation with the specified query.
-func (m *PGXMock) ExpectQueryRow(query string) *QueryRowExpectation {
+func (m *PGXConn) ExpectQueryRow(query string) *QueryRowExpectation {
 	e := &QueryRowExpectation{
 		basicExpectation: basicExpectation{
 			method:     "QueryRow",
@@ -162,7 +162,7 @@ func (m *PGXMock) ExpectQueryRow(query string) *QueryRowExpectation {
 	return e
 }
 
-func (m *PGXMock) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
+func (m *PGXConn) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
 	e, err := m.findExpectation("QueryRow", append([]any{query}, args...)...)
 	if err != nil {
 		return &Row{err: err}
@@ -171,13 +171,13 @@ func (m *PGXMock) QueryRow(ctx context.Context, query string, args ...any) pgx.R
 	return ret[0].(pgx.Row)
 }
 
-func (m *PGXMock) ExpectBegin() *BeginExpectation {
+func (m *PGXConn) ExpectBegin() *BeginExpectation {
 	e := &BeginExpectation{basicExpectation: basicExpectation{method: "Begin"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXMock) Begin(ctx context.Context) (pgx.Tx, error) {
+func (m *PGXConn) Begin(ctx context.Context) (pgx.Tx, error) {
 	e, err := m.findExpectation("Begin")
 	if err != nil {
 		return nil, err
@@ -189,13 +189,13 @@ func (m *PGXMock) Begin(ctx context.Context) (pgx.Tx, error) {
 	return m, nil
 }
 
-func (m *PGXMock) ExpectBeginTx() *BeginTxExpectation {
+func (m *PGXConn) ExpectBeginTx() *BeginTxExpectation {
 	e := &BeginTxExpectation{basicExpectation: basicExpectation{method: "BeginTx"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXMock) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
+func (m *PGXConn) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
 	e, err := m.findExpectation("BeginTx", txOptions)
 	if err != nil {
 		return nil, err
@@ -207,13 +207,13 @@ func (m *PGXMock) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx,
 	return m, nil
 }
 
-func (m *PGXMock) ExpectCommit() *CommitExpectation {
+func (m *PGXConn) ExpectCommit() *CommitExpectation {
 	e := &CommitExpectation{basicExpectation: basicExpectation{method: "Commit"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXMock) Commit(ctx context.Context) error {
+func (m *PGXConn) Commit(ctx context.Context) error {
 	e, err := m.findExpectation("Commit")
 	if err != nil {
 		return err
@@ -225,13 +225,13 @@ func (m *PGXMock) Commit(ctx context.Context) error {
 	return nil
 }
 
-func (m *PGXMock) ExpectRollback() *RollbackExpectation {
+func (m *PGXConn) ExpectRollback() *RollbackExpectation {
 	e := &RollbackExpectation{basicExpectation: basicExpectation{method: "Rollback"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXMock) Rollback(ctx context.Context) error {
+func (m *PGXConn) Rollback(ctx context.Context) error {
 	e, err := m.findExpectation("Rollback")
 	if err != nil {
 		return err
@@ -261,7 +261,7 @@ func (e *PrepareExpectation) WillReturnError(err error) {
 }
 
 // ExpectPrepare configures an expectation for preparing a statement.
-func (m *PGXMock) ExpectPrepare(name, sql string) *PrepareExpectation {
+func (m *PGXConn) ExpectPrepare(name, sql string) *PrepareExpectation {
 	e := &PrepareExpectation{
 		basicExpectation: basicExpectation{
 			method: "Prepare",
@@ -272,7 +272,7 @@ func (m *PGXMock) ExpectPrepare(name, sql string) *PrepareExpectation {
 	return e
 }
 
-func (m *PGXMock) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
+func (m *PGXConn) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
 	e, err := m.findExpectation("Prepare", name, sql)
 	if err != nil {
 		return nil, err
@@ -298,7 +298,7 @@ func (e *DeallocateExpectation) WillReturnError(err error) {
 	e.returns = []any{err}
 }
 
-func (m *PGXMock) ExpectDeallocate(name string) *DeallocateExpectation {
+func (m *PGXConn) ExpectDeallocate(name string) *DeallocateExpectation {
 	e := &DeallocateExpectation{
 		basicExpectation: basicExpectation{
 			method: "Deallocate",
@@ -309,7 +309,7 @@ func (m *PGXMock) ExpectDeallocate(name string) *DeallocateExpectation {
 	return e
 }
 
-func (m *PGXMock) Deallocate(ctx context.Context, name string) error {
+func (m *PGXConn) Deallocate(ctx context.Context, name string) error {
 	e, err := m.findExpectation("Deallocate", name)
 	if err != nil {
 		return err
@@ -329,7 +329,7 @@ func (e *DeallocateAllExpectation) WillReturnError(err error) {
 	e.returns = []any{err}
 }
 
-func (m *PGXMock) ExpectDeallocateAll() *DeallocateAllExpectation {
+func (m *PGXConn) ExpectDeallocateAll() *DeallocateAllExpectation {
 	e := &DeallocateAllExpectation{
 		basicExpectation: basicExpectation{method: "DeallocateAll"},
 	}
@@ -337,7 +337,7 @@ func (m *PGXMock) ExpectDeallocateAll() *DeallocateAllExpectation {
 	return e
 }
 
-func (m *PGXMock) DeallocateAll(ctx context.Context) error {
+func (m *PGXConn) DeallocateAll(ctx context.Context) error {
 	e, err := m.findExpectation("DeallocateAll")
 	if err != nil {
 		return err
@@ -367,7 +367,7 @@ func (e *CopyFromExpectation) WillReturnError(err error) {
 }
 
 // ExpectCopyFrom configures an expectation for bulk copy operations.
-func (m *PGXMock) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation {
+func (m *PGXConn) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation {
 	e := &CopyFromExpectation{
 		basicExpectation: basicExpectation{
 			method: "CopyFrom",
@@ -378,7 +378,7 @@ func (m *PGXMock) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation 
 	return e
 }
 
-func (m *PGXMock) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
+func (m *PGXConn) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
 	e, err := m.findExpectation("CopyFrom", tableName, columnNames)
 	if err != nil {
 		return 0, err
@@ -394,13 +394,13 @@ func (m *PGXMock) CopyFrom(ctx context.Context, tableName pgx.Identifier, column
 }
 
 // Methods that return nil/defaults for interface compliance
-func (m *PGXMock) PgConn() *pgconn.PgConn  { return nil }
-func (m *PGXMock) Config() *pgx.ConnConfig { return nil }
-func (m *PGXMock) LargeObjects() pgx.LargeObjects {
+func (m *PGXConn) PgConn() *pgconn.PgConn  { return nil }
+func (m *PGXConn) Config() *pgx.ConnConfig { return nil }
+func (m *PGXConn) LargeObjects() pgx.LargeObjects {
 	panic("not implemented")
 }
-func (m *PGXMock) Conn() *pgx.Conn { return nil }
+func (m *PGXConn) Conn() *pgx.Conn { return nil }
 
-func (m *PGXMock) SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults {
+func (m *PGXConn) SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults {
 	return nil
 }

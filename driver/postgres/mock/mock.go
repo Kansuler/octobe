@@ -396,8 +396,3 @@ func (r *Rows) RawValues() [][]byte {
 }
 
 func (r *Rows) Conn() *pgx.Conn { return nil }
-
-// GetRowsForTesting exposes internal row data for test verification.
-func (r *Rows) GetRowsForTesting() [][]any {
-	return r.rows
-}

@@ -27,15 +27,15 @@ func (s *PGXIntegrationSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.db = openPGXWithRetry(s.T(), s.ctx, integrationDSN(s.T()))
 
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		return session.ExecuteVoid(s.ctx, migrateProducts(pgxProductsTable))
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+		return session.ExecuteNoResult(s.ctx, migrateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
 
 func (s *PGXIntegrationSuite) SetupTest() {
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		return session.ExecuteVoid(s.ctx, truncateProducts(pgxProductsTable))
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+		return session.ExecuteNoResult(s.ctx, truncateProducts(pgxProductsTable))
 	})
 	s.Require().NoError(err)
 }
@@ -45,17 +45,17 @@ func (s *PGXIntegrationSuite) TearDownSuite() {
 		return
 	}
 
-	_ = s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
-		return session.ExecuteVoid(s.ctx, dropProducts(pgxProductsTable))
+	_ = s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+		return session.ExecuteNoResult(s.ctx, dropProducts(pgxProductsTable))
 	})
 	s.Require().NoError(s.db.Close(s.ctx))
 }
 
-func (s *PGXIntegrationSuite) TestStartTransactionCommits() {
+func (s *PGXIntegrationSuite) TestRunInTransactionCommits() {
 	name := "pgx committed product"
 	var created integrationProduct
 
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
 		var err error
 		created, err = session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 		return err
@@ -67,11 +67,11 @@ func (s *PGXIntegrationSuite) TestStartTransactionCommits() {
 	s.Equal(created, loaded)
 }
 
-func (s *PGXIntegrationSuite) TestStartTransactionRollsBackOnError() {
+func (s *PGXIntegrationSuite) TestRunInTransactionRollsBackOnError() {
 	name := "pgx rolled back product"
 	expectedErr := errors.New("force rollback")
 
-	err := s.db.StartTransaction(s.ctx, func(session *octobe.ManagedSession[postgres.Builder]) error {
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
 		_, err := session.Execute(s.ctx, createProduct(pgxProductsTable, name))
 		if err != nil {
 			return err
@@ -88,7 +88,7 @@ func (s *PGXIntegrationSuite) TestStartTransactionRollsBackOnError() {
 func (s *PGXIntegrationSuite) TestManualTransactionCommits() {
 	name := "pgx manual commit product"
 
-	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.Transaction(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 
@@ -104,7 +104,7 @@ func (s *PGXIntegrationSuite) TestManualTransactionCommits() {
 func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 	name := "pgx manual rollback product"
 
-	session, err := s.db.BeginTx(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.Transaction(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 
@@ -118,14 +118,14 @@ func (s *PGXIntegrationSuite) TestManualTransactionRollsBack() {
 }
 
 func (s *PGXIntegrationSuite) findPGXProduct(id int) (integrationProduct, error) {
-	session, err := s.db.Begin(s.ctx)
+	session, err := s.db.Session(s.ctx)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(session.Close(s.ctx)) }()
 	return session.Execute(s.ctx, productByID(pgxProductsTable, id))
 }
 
 func (s *PGXIntegrationSuite) findPGXProductsByName(name string) ([]integrationProduct, error) {
-	session, err := s.db.Begin(s.ctx)
+	session, err := s.db.Session(s.ctx)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(session.Close(s.ctx)) }()
 	return session.Execute(s.ctx, productsByName(pgxProductsTable, name))

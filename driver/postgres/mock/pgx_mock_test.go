@@ -16,7 +16,7 @@ func TestMock(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Ping success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -27,7 +27,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Ping error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -41,7 +41,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Close success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -52,43 +52,47 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Exec success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
-		session, err := o.Begin(ctx)
+		session, err := o.Session(ctx)
 		require.NoError(t, err)
 
 		query := "INSERT INTO events"
 		args := []any{1, "test"}
 		mock.ExpectExec(query).WithArgs(args...).WillReturnResult(pgconn.CommandTag{})
 
-		_, err = session.Builder()(query).Arguments(args...).Exec(ctx)
+		_, err = session.Execute(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) (postgres.ExecResult, error) {
+			return newQuery(query).WithArgs(args...).Exec(ctx)
+		})
 		require.NoError(t, err)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
 
 	t.Run("Exec error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
-		session, err := o.Begin(ctx)
+		session, err := o.Session(ctx)
 		require.NoError(t, err)
 
 		query := "INSERT INTO events"
 		expectedErr := errors.New("exec error")
 		mock.ExpectExec(query).WillReturnError(expectedErr)
 
-		_, err = session.Builder()(query).Exec(ctx)
+		_, err = session.Execute(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) (postgres.ExecResult, error) {
+			return newQuery(query).Exec(ctx)
+		})
 		require.Error(t, err)
 		require.Equal(t, expectedErr, err)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
 
 	t.Run("Query success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
-		session, err := o.Begin(ctx)
+		session, err := o.Session(ctx)
 		require.NoError(t, err)
 
 		query := "SELECT id, name FROM users"
@@ -98,35 +102,39 @@ func TestMock(t *testing.T) {
 
 		mock.ExpectQuery(query).WillReturnRows(rows)
 
-		err = session.Builder()(query).Query(ctx, func(r postgres.Rows) error {
-			i := 0
-			for r.Next() {
-				var id int
-				var name string
-				require.NoError(t, r.Scan(&id, &name))
-				require.Equal(t, rows.GetRowsForTesting()[i][0], id)
-				require.Equal(t, rows.GetRowsForTesting()[i][1], name)
-				i++
-			}
-			return r.Err()
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+			return newQuery(query).Query(ctx, func(r postgres.Rows) error {
+				i := 0
+				for r.Next() {
+					var id int
+					var name string
+					require.NoError(t, r.Scan(&id, &name))
+					require.Equal(t, rows.rows[i][0], id)
+					require.Equal(t, rows.rows[i][1], name)
+					i++
+				}
+				return r.Err()
+			})
 		})
 		require.NoError(t, err)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
 
 	t.Run("Query error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
-		session, err := o.Begin(ctx)
+		session, err := o.Session(ctx)
 		require.NoError(t, err)
 
 		query := "SELECT id, name FROM users"
 		expectedErr := errors.New("query error")
 		mock.ExpectQuery(query).WillReturnError(expectedErr)
 
-		err = session.Builder()(query).Query(ctx, func(r postgres.Rows) error {
-			return nil
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+			return newQuery(query).Query(ctx, func(r postgres.Rows) error {
+				return nil
+			})
 		})
 		require.Error(t, err)
 		require.Equal(t, expectedErr, err)
@@ -134,10 +142,10 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("QueryRow success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
-		session, err := o.Begin(ctx)
+		session, err := o.Session(ctx)
 		require.NoError(t, err)
 
 		query := "SELECT name FROM users WHERE id = ?"
@@ -145,17 +153,19 @@ func TestMock(t *testing.T) {
 		mock.ExpectQueryRow(query).WithArgs(1).WillReturnRow(row)
 
 		var name string
-		err = session.Builder()(query).Arguments(1).QueryRow(ctx, &name)
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+			return newQuery(query).WithArgs(1).QueryRow(ctx, &name)
+		})
 		require.NoError(t, err)
 		require.Equal(t, "John Doe", name)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
 
 	t.Run("QueryRow error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
-		session, err := o.Begin(ctx)
+		session, err := o.Session(ctx)
 		require.NoError(t, err)
 
 		query := "SELECT name FROM users WHERE id = ?"
@@ -164,14 +174,16 @@ func TestMock(t *testing.T) {
 		mock.ExpectQueryRow(query).WithArgs(1).WillReturnRow(row)
 
 		var name string
-		err = session.Builder()(query).Arguments(1).QueryRow(ctx, &name)
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+			return newQuery(query).WithArgs(1).QueryRow(ctx, &name)
+		})
 		require.Error(t, err)
 		require.Equal(t, expectedErr, err)
 		require.NoError(t, mock.AllExpectationsMet())
 	})
 
 	t.Run("Transaction success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -179,7 +191,7 @@ func TestMock(t *testing.T) {
 		mock.ExpectBeginTx()
 		mock.ExpectCommit()
 
-		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Commit(ctx)
@@ -189,7 +201,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Transaction with exec", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -199,10 +211,12 @@ func TestMock(t *testing.T) {
 		mock.ExpectExec(query).WithArgs("test-user").WillReturnResult(pgconn.CommandTag{})
 		mock.ExpectCommit()
 
-		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
-		_, err = session.Builder()(query).Arguments("test-user").Exec(ctx)
+		_, err = session.Execute(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) (postgres.ExecResult, error) {
+			return newQuery(query).WithArgs("test-user").Exec(ctx)
+		})
 		require.NoError(t, err)
 
 		err = session.Commit(ctx)
@@ -212,7 +226,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Transaction rollback", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -220,7 +234,7 @@ func TestMock(t *testing.T) {
 		mock.ExpectBeginTx()
 		mock.ExpectRollback()
 
-		session, err := o.BeginTx(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, postgres.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Rollback(ctx)
@@ -230,7 +244,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Unfulfilled expectations", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		mock.ExpectPing()
 		mock.ExpectClose()
 
@@ -240,7 +254,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("No more expectations", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -250,7 +264,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Expectation order mismatch", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		o, err := octobe.New(postgres.OpenPGXWithConn(mock))
 		require.NoError(t, err)
 
@@ -264,7 +278,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Prepare success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		name := "test_stmt"
 		sql := "SELECT * FROM users WHERE id = $1"
@@ -279,7 +293,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Prepare error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		name := "test_stmt"
 		sql := "SELECT * FROM users WHERE id = $1"
@@ -294,7 +308,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Deallocate success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		name := "test_stmt"
 		mock.ExpectDeallocate(name)
@@ -305,7 +319,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Deallocate error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		name := "test_stmt"
 		expectedErr := errors.New("deallocate failed")
@@ -318,7 +332,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("DeallocateAll success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		mock.ExpectDeallocateAll()
 
@@ -328,7 +342,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("DeallocateAll error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		expectedErr := errors.New("deallocate all failed")
 		mock.ExpectDeallocateAll().WillReturnError(expectedErr)
@@ -340,7 +354,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("CopyFrom success", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		tableName := pgx.Identifier{"users"}
 		columns := []string{"name", "email"}
@@ -353,7 +367,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("CopyFrom error", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 
 		tableName := pgx.Identifier{"users"}
 		columns := []string{"name", "email"}
@@ -424,7 +438,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Exact query matching rejects extra SQL", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		mock.ExpectExec("SELECT id FROM users").WillReturnResult(pgconn.CommandTag{})
 
 		_, err := mock.Exec(ctx, "SELECT id FROM users WHERE active = true")
@@ -434,7 +448,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Contains query matching", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		mock.ExpectExec("SELECT id FROM users").Contains().WillReturnResult(pgconn.CommandTag{})
 
 		_, err := mock.Exec(ctx, "SELECT id FROM users WHERE active = true")
@@ -443,7 +457,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Regex query matching", func(t *testing.T) {
-		mock := NewPGXMock()
+		mock := NewPGXConn()
 		mock.ExpectQueryRow(`SELECT id FROM users WHERE id = \d+`).Regex().WillReturnRow(NewRow(7))
 
 		var id int

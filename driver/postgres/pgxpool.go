@@ -26,9 +26,9 @@ type PGXPoolSessionConn interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-// PGXPoolSessionAcquirer customizes how non-transactional sessions acquire a pinned connection.
-type PGXPoolSessionAcquirer interface {
-	AcquireSession(context.Context) (PGXPoolSessionConn, error)
+// PGXPoolSessionConnAcquirer customizes how non-transactional sessions acquire a pinned connection.
+type PGXPoolSessionConnAcquirer interface {
+	AcquireSessionConn(context.Context) (PGXPoolSessionConn, error)
 }
 
 var _ PGXPool = &pgxpool.Pool{}
@@ -63,7 +63,7 @@ var (
 )
 
 // OpenPGXPool creates a connection pool driver from a DSN and verifies connectivity.
-func OpenPGXPool(ctx context.Context, dsn string) PGXPoolOpen {
+func OpenPGXPool(ctx context.Context, dsn string) PGXPoolOpenFunc {
 	return func() (PGXPoolDriver, error) {
 		pool, err := pgxpool.New(ctx, dsn)
 		if err != nil {
@@ -81,7 +81,7 @@ func OpenPGXPool(ctx context.Context, dsn string) PGXPoolOpen {
 }
 
 // OpenPGXWithPool creates a driver from an existing pool.
-func OpenPGXWithPool(pool PGXPool) PGXPoolOpen {
+func OpenPGXWithPool(pool PGXPool) PGXPoolOpenFunc {
 	return func() (PGXPoolDriver, error) {
 		if pool == nil {
 			return nil, errors.New("pool is nil")
@@ -93,8 +93,8 @@ func OpenPGXWithPool(pool PGXPool) PGXPoolOpen {
 	}
 }
 
-// Begin starts a non-transactional session that pins one pool connection until Close.
-func (d *pgxpoolConn) Begin(ctx context.Context) (*octobe.Session[Builder], error) {
+// OpenSession opens a non-transactional session that pins one pool connection until Close.
+func (d *pgxpoolConn) Session(ctx context.Context) (*octobe.Session[QueryFactory], error) {
 	conn, err := d.acquireSession(ctx)
 	if err != nil {
 		return nil, err
@@ -110,8 +110,8 @@ func (d *pgxpoolConn) acquireSession(ctx context.Context) (PGXPoolSessionConn, e
 		return nil, errors.New("pool is nil")
 	}
 
-	if acquirer, ok := d.pool.(PGXPoolSessionAcquirer); ok {
-		conn, err := acquirer.AcquireSession(ctx)
+	if acquirer, ok := d.pool.(PGXPoolSessionConnAcquirer); ok {
+		conn, err := acquirer.AcquireSessionConn(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,7 @@ func (d *pgxpoolConn) acquireSession(ctx context.Context) (PGXPoolSessionConn, e
 }
 
 // BeginTx starts a new transactional session.
-func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Session[Builder], error) {
+func (d *pgxpoolConn) Transaction(ctx context.Context, opts ...Option) (*octobe.SessionTransaction[QueryFactory], error) {
 	var cfg Config
 	for _, opt := range transactionOptions(opts) {
 		opt(&cfg)
@@ -153,7 +153,7 @@ func (d *pgxpoolConn) BeginTx(ctx context.Context, opts ...Option) (*octobe.Sess
 		return nil, err
 	}
 
-	return octobe.NewSession(&pgxSession{
+	return octobe.NewTransaction(&pgxSession{
 		cfg:       cfg,
 		tx:        tx,
 		committed: false,
@@ -178,9 +178,9 @@ func (d *pgxpoolConn) Ping(ctx context.Context) error {
 	return d.pool.Ping(ctx)
 }
 
-// StartTransaction runs fn in a transaction managed by Octobe.
-func (d *pgxpoolConn) StartTransaction(ctx context.Context, fn func(session *octobe.ManagedSession[Builder]) error, opts ...Option) (err error) {
-	return octobe.StartTransaction[PGXPool](ctx, d, fn, opts...)
+// RunInTransaction runs fn in a transaction managed by Octobe.
+func (d *pgxpoolConn) RunInTransaction(ctx context.Context, fn func(session *octobe.SessionManaged[QueryFactory]) error, opts ...Option) (err error) {
+	return octobe.RunInTransaction[PGXPool](ctx, d, fn, opts...)
 }
 
 // pgxpoolSession implements octobe.Backend for a pinned pool connection.
@@ -192,7 +192,7 @@ type pgxpoolSession struct {
 	closed    bool
 }
 
-var _ octobe.Backend[Builder] = &pgxpoolSession{}
+var _ octobe.Backend[QueryFactory] = &pgxpoolSession{}
 
 // Commit commits the transaction.
 func (s *pgxpoolSession) Commit(ctx context.Context) error {
@@ -243,10 +243,10 @@ func (s *pgxpoolSession) Close(ctx context.Context) error {
 	return nil
 }
 
-// Builder returns a query builder for this session.
-func (s *pgxpoolSession) Builder() Builder {
-	return func(query string) Segment {
-		return &pgxpoolSegment{
+// QueryFactory returns a query factory for this session.
+func (s *pgxpoolSession) QueryFactory() QueryFactory {
+	return func(query string) Statement {
+		return &pgxPoolStatement{
 			query:   query,
 			args:    nil,
 			used:    false,
@@ -255,38 +255,38 @@ func (s *pgxpoolSession) Builder() Builder {
 	}
 }
 
-// pgxpoolSegment represents a single-use query with arguments.
-type pgxpoolSegment struct {
+// pgxPoolStatement represents a single-use query with arguments.
+type pgxPoolStatement struct {
 	query   string
 	args    []any
 	used    bool
 	session *pgxpoolSession
 }
 
-var _ Segment = &pgxpoolSegment{}
+var _ Statement = &pgxPoolStatement{}
 
-func (s *pgxpoolSegment) use() {
+func (s *pgxPoolStatement) use() {
 	s.used = true
 }
 
-// activeSession returns the active session for this segment.
-func (s *pgxpoolSegment) activeSession() (*pgxpoolSession, error) {
+// activeSession returns the active session for this statement.
+func (s *pgxPoolStatement) activeSession() (*pgxpoolSession, error) {
 	if s.session == nil || s.session.closed {
 		return nil, errors.New("session is closed")
 	}
 	return s.session, nil
 }
 
-// Arguments sets query parameters.
-func (s *pgxpoolSegment) Arguments(args ...any) Segment {
+// WithArgs sets query parameters.
+func (s *pgxPoolStatement) WithArgs(args ...any) Statement {
 	s.args = args
 	return s
 }
 
 // Exec executes the query and returns affected rows.
-func (s *pgxpoolSegment) Exec(ctx context.Context) (ExecResult, error) {
+func (s *pgxPoolStatement) Exec(ctx context.Context) (ExecResult, error) {
 	if s.used {
-		return ExecResult{}, octobe.ErrAlreadyUsed
+		return ExecResult{}, octobe.ErrStatementAlreadyExecuted
 	}
 	defer s.use()
 	session, err := s.activeSession()
@@ -317,9 +317,9 @@ func (s *pgxpoolSegment) Exec(ctx context.Context) (ExecResult, error) {
 }
 
 // QueryRow executes the query expecting one row and scans into dest.
-func (s *pgxpoolSegment) QueryRow(ctx context.Context, dest ...any) error {
+func (s *pgxPoolStatement) QueryRow(ctx context.Context, dest ...any) error {
 	if s.used {
-		return octobe.ErrAlreadyUsed
+		return octobe.ErrStatementAlreadyExecuted
 	}
 	defer s.use()
 	session, err := s.activeSession()
@@ -335,10 +335,10 @@ func (s *pgxpoolSegment) QueryRow(ctx context.Context, dest ...any) error {
 	return session.tx.QueryRow(ctx, s.query, s.args...).Scan(dest...)
 }
 
-// Query executes the query and calls cb for each row.
-func (s *pgxpoolSegment) Query(ctx context.Context, cb func(Rows) error) error {
+// Query executes the query and passes the result set to handleRows.
+func (s *pgxPoolStatement) Query(ctx context.Context, handleRows func(Rows) error) error {
 	if s.used {
-		return octobe.ErrAlreadyUsed
+		return octobe.ErrStatementAlreadyExecuted
 	}
 	defer s.use()
 
@@ -364,7 +364,7 @@ func (s *pgxpoolSegment) Query(ctx context.Context, cb func(Rows) error) error {
 	}
 
 	defer rows.Close()
-	if err = cb(rows); err != nil {
+	if err = handleRows(rows); err != nil {
 		return err
 	}
 
