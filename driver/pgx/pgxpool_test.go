@@ -24,7 +24,7 @@ func TestPGXPoolRunInTransactionCommits(t *testing.T) {
 	m.ExpectCommit()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -85,12 +85,12 @@ func TestPGXPoolManualTransactionCommits(t *testing.T) {
 	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectCommit()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -147,7 +147,7 @@ func TestPGXPoolNonTransactionalSessionExecutesHandlers(t *testing.T) {
 	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectRelease()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -203,7 +203,7 @@ func TestPGXPoolNonTransactionalSessionCloseReleasesConnection(t *testing.T) {
 	m.ExpectAcquire()
 	m.ExpectRelease()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -228,7 +228,7 @@ func TestPGXPoolRunInTransactionRollsBackOnError(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -236,7 +236,7 @@ func TestPGXPoolRunInTransactionRollsBackOnError(t *testing.T) {
 	err = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		err := session.ExecuteNoResult(ctx, Migration())
 		return err
-	}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	}, pgx.WithTxOptions(pgx.TxOptions{}))
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
@@ -253,7 +253,7 @@ func TestPGXPoolRunInTransactionRollsBackOnPanic(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -265,7 +265,7 @@ func TestPGXPoolRunInTransactionRollsBackOnPanic(t *testing.T) {
 				return err
 			}
 			panic("some panic")
-		}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		}, pgx.WithTxOptions(pgx.TxOptions{}))
 	})
 
 	assert.NoError(t, ob.Close(ctx))
@@ -283,12 +283,12 @@ func TestPGXPoolManualTransactionRollsBack(t *testing.T) {
 	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
 	m.ExpectRollback()
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -325,7 +325,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 	m.ExpectAcquire()
 	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -407,7 +407,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 }
 
 func TestOpenPGXWithPoolNil(t *testing.T) {
-	_, err := pgx.OpenPGXWithPool(nil)()
+	_, err := pgx.OpenWithPool(nil)()
 	assert.Error(t, err)
 }
 
@@ -418,12 +418,12 @@ func TestPGXPoolBeginTxReturnsDriverError(t *testing.T) {
 	expectedErr := errors.New("begin error")
 	m.ExpectBeginTx().WillReturnError(expectedErr)
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	_, err = ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	_, err = ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	assert.NoError(t, m.AllExpectationsMet())
@@ -437,12 +437,12 @@ func TestPGXPoolCommitReturnsDriverError(t *testing.T) {
 	m.ExpectBeginTx()
 	m.ExpectCommit().WillReturnError(expectedErr)
 
-	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -464,7 +464,7 @@ func TestPGXPoolStatementExecError(t *testing.T) {
 		m.ExpectExec("INSERT INTO products").Contains().WillReturnError(expectedErr)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -488,12 +488,12 @@ func TestPGXPoolStatementExecError(t *testing.T) {
 		m.ExpectExec("INSERT INTO products").Contains().WillReturnError(expectedErr)
 		m.ExpectRollback()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -522,7 +522,7 @@ func TestPGXPoolStatementQueryRowError(t *testing.T) {
 		m.ExpectQueryRow("SELECT id FROM products").Contains().WillReturnRow(row)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -547,12 +547,12 @@ func TestPGXPoolStatementQueryRowError(t *testing.T) {
 		m.ExpectQueryRow("SELECT id FROM products").Contains().WillReturnRow(row)
 		m.ExpectRollback()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -580,7 +580,7 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT id, name FROM products").Contains().WillReturnError(expectedErr)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -611,12 +611,12 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT id, name FROM products").Contains().WillReturnError(expectedErr)
 		m.ExpectRollback()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -643,7 +643,7 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT id, name FROM products").Contains().WillReturnRows(rows)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}

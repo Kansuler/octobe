@@ -21,7 +21,7 @@ func TestPGXRunInTransactionCommits(t *testing.T) {
 	m.ExpectCommit()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -69,13 +69,13 @@ func TestPGXManualTransactionCommits(t *testing.T) {
 	m.ExpectCommit()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	ctx := context.Background()
-	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -123,7 +123,7 @@ func TestPGXNonTransactionalSessionExecutesHandlers(t *testing.T) {
 	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -225,7 +225,7 @@ func TestPGXRunInTransactionRollsBackOnError(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -238,7 +238,7 @@ func TestPGXRunInTransactionRollsBackOnError(t *testing.T) {
 			t.FailNow()
 		}
 		return expectedErr
-	}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	}, pgx.WithTxOptions(pgx.TxOptions{}))
 
 	assert.Equal(t, expectedErr, err)
 
@@ -255,7 +255,7 @@ func TestPGXRunInTransactionRollsBackOnPanic(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -277,7 +277,7 @@ func TestPGXRunInTransactionRollsBackOnPanic(t *testing.T) {
 			t.FailNow()
 		}
 		panic(panicMsg)
-	}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	}, pgx.WithTxOptions(pgx.TxOptions{}))
 }
 
 func TestPGXManualTransactionRollsBack(t *testing.T) {
@@ -290,13 +290,13 @@ func TestPGXManualTransactionRollsBack(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	ctx := context.Background()
-	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -328,7 +328,7 @@ func TestPGXStatementCannotBeReused(t *testing.T) {
 		m.ExpectExec("CREATE TABLE").WillReturnResult(mock.NewResult("", 0))
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -366,7 +366,7 @@ func TestPGXStatementCannotBeReused(t *testing.T) {
 		m.ExpectQueryRow("SELECT").WillReturnRow(mock.NewRow(1, name))
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -403,7 +403,7 @@ func TestPGXStatementCannotBeReused(t *testing.T) {
 		m.ExpectQuery("SELECT").WillReturnRows(mock.NewRows([]string{"id", "name"}))
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -440,7 +440,7 @@ func TestPGXStatementCannotBeReused(t *testing.T) {
 }
 
 func TestOpenPGXWithConnRejectsNil(t *testing.T) {
-	_, err := octobe.New(pgx.OpenPGXWithConn(nil))
+	_, err := octobe.New(pgx.OpenWithConn(nil))
 	assert.Error(t, err)
 	assert.Equal(t, "conn is nil", err.Error())
 }
@@ -451,13 +451,13 @@ func TestPGXBeginTxReturnsDriverError(t *testing.T) {
 	m.ExpectBeginTx().WillReturnError(expectedErr)
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	ctx := context.Background()
-	_, err = ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	_, err = ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	assert.ErrorIs(t, err, expectedErr)
 
 	err = ob.Close(ctx)
@@ -472,13 +472,13 @@ func TestPGXCommitReturnsDriverError(t *testing.T) {
 	m.ExpectCommit().WillReturnError(expectedErr)
 	m.ExpectClose()
 
-	ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+	ob, err := octobe.New(pgx.OpenWithConn(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	ctx := context.Background()
-	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -498,7 +498,7 @@ func TestPGXStatementExecError(t *testing.T) {
 		m.ExpectExec("INSERT").WillReturnError(expectedErr)
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -530,7 +530,7 @@ func TestPGXStatementExecError(t *testing.T) {
 		m.ExpectRollback()
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -543,7 +543,7 @@ func TestPGXStatementExecError(t *testing.T) {
 				return err
 			})
 			return err
-		}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		}, pgx.WithTxOptions(pgx.TxOptions{}))
 
 		assert.ErrorIs(t, err, expectedErr)
 
@@ -561,7 +561,7 @@ func TestPGXStatementQueryRowError(t *testing.T) {
 		m.ExpectQueryRow("SELECT").WillReturnRow(mock.NewRow().WillReturnError(expectedErr))
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -594,7 +594,7 @@ func TestPGXStatementQueryRowError(t *testing.T) {
 		m.ExpectRollback()
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -608,7 +608,7 @@ func TestPGXStatementQueryRowError(t *testing.T) {
 				return p, err
 			})
 			return err
-		}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		}, pgx.WithTxOptions(pgx.TxOptions{}))
 
 		assert.ErrorIs(t, err, expectedErr)
 
@@ -626,7 +626,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT").WillReturnError(expectedErr)
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -658,7 +658,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 		m.ExpectRollback()
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -671,7 +671,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 				return err
 			})
 			return err
-		}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		}, pgx.WithTxOptions(pgx.TxOptions{}))
 
 		assert.ErrorIs(t, err, expectedErr)
 
@@ -687,7 +687,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT").WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -719,7 +719,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 		m.ExpectRollback()
 		m.ExpectClose()
 
-		ob, err := octobe.New(pgx.OpenPGXWithConn(m))
+		ob, err := octobe.New(pgx.OpenWithConn(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -732,7 +732,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 				return err
 			})
 			return err
-		}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+		}, pgx.WithTxOptions(pgx.TxOptions{}))
 
 		assert.ErrorIs(t, err, expectedErr)
 

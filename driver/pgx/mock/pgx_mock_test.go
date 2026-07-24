@@ -17,7 +17,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Ping success", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
 		mock.ExpectPing()
@@ -28,7 +28,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Ping error", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
 		expectedErr := errors.New("ping failed")
@@ -42,7 +42,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Close success", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
 		mock.ExpectClose()
@@ -53,7 +53,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Exec success", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
 		require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Exec error", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
 		require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Query success", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
 		require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Query error", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
 		require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("QueryRow success", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
 		require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("QueryRow error", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
 		require.NoError(t, err)
@@ -184,14 +184,14 @@ func TestMock(t *testing.T) {
 
 	t.Run("Transaction success", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
-		txOpts := opgx.PGXTxOptions{}
+		txOpts := opgx.TxOptions{}
 		mock.ExpectBeginTx()
 		mock.ExpectCommit()
 
-		session, err := o.Transaction(ctx, opgx.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, opgx.WithTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Commit(ctx)
@@ -202,16 +202,16 @@ func TestMock(t *testing.T) {
 
 	t.Run("Transaction with exec", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
-		txOpts := opgx.PGXTxOptions{}
+		txOpts := opgx.TxOptions{}
 		mock.ExpectBeginTx()
 		query := "INSERT INTO users (name) VALUES ($1)"
 		mock.ExpectExec(query).WithArgs("test-user").WillReturnResult(pgconn.CommandTag{})
 		mock.ExpectCommit()
 
-		session, err := o.Transaction(ctx, opgx.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, opgx.WithTxOptions(txOpts))
 		require.NoError(t, err)
 
 		_, err = session.Execute(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) (opgx.ExecResult, error) {
@@ -227,14 +227,14 @@ func TestMock(t *testing.T) {
 
 	t.Run("Transaction rollback", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
-		txOpts := opgx.PGXTxOptions{}
+		txOpts := opgx.TxOptions{}
 		mock.ExpectBeginTx()
 		mock.ExpectRollback()
 
-		session, err := o.Transaction(ctx, opgx.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, opgx.WithTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Rollback(ctx)
@@ -255,7 +255,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("No more expectations", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
 		err = o.Ping(ctx)
@@ -265,7 +265,7 @@ func TestMock(t *testing.T) {
 
 	t.Run("Expectation order mismatch", func(t *testing.T) {
 		mock := NewPGXConn()
-		o, err := octobe.New(opgx.OpenPGXWithConn(mock))
+		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
 		mock.ExpectClose()

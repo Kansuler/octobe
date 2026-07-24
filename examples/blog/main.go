@@ -342,10 +342,10 @@ func CreatePostWithTags(title, content string, authorID int, tagNames []string) 
 
 // Application service layer - demonstrates transaction usage
 type BlogService struct {
-	db pgx.PGXDriver
+	db pgx.Driver
 }
 
-func NewBlogService(db pgx.PGXDriver) *BlogService {
+func NewBlogService(db pgx.Driver) *BlogService {
 	return &BlogService{db: db}
 }
 
@@ -418,7 +418,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize database
-	db, err := octobe.New(pgx.OpenPGXPool(ctx, dsn))
+	db, err := octobe.New(pgx.OpenPool(ctx, dsn))
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

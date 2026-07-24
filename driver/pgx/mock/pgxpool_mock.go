@@ -12,28 +12,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PGXPool provides a mock implementation of opgx.PGXPool and pgx.Tx interfaces
+// Pool provides a mock implementation of opgx.Pool and pgx.Tx interfaces
 // for testing database pool interactions without requiring an actual database connection.
-type PGXPool struct {
+type Pool struct {
 	mu              sync.Mutex
 	expectations    []expectation
 	unexpectedCalls []error
 }
 
 var (
-	_ opgx.PGXPool                    = (*PGXPool)(nil)
-	_ opgx.PGXPoolSessionConnAcquirer = (*PGXPool)(nil)
-	_ opgx.PGXPoolSessionConn         = (*PGXPool)(nil)
-	_ pgx.Tx                          = (*PGXPool)(nil)
+	_ opgx.Pool                    = (*Pool)(nil)
+	_ opgx.PoolSessionConnAcquirer = (*Pool)(nil)
+	_ opgx.PoolSessionConn         = (*Pool)(nil)
+	_ pgx.Tx                       = (*Pool)(nil)
 )
 
 // NewPGXPool creates a new mock database connection pool for testing.
-func NewPGXPool() *PGXPool {
-	return &PGXPool{}
+func NewPGXPool() *Pool {
+	return &Pool{}
 }
 
 // findExpectation locates the first unfulfilled expectation matching the method and arguments.
-func (m *PGXPool) findExpectation(method string, args ...any) (expectation, error) {
+func (m *Pool) findExpectation(method string, args ...any) (expectation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -50,14 +50,14 @@ func (m *PGXPool) findExpectation(method string, args ...any) (expectation, erro
 	return nil, fmt.Errorf("%w for %s with args %v", ErrNoExpectation, method, args)
 }
 
-func (m *PGXPool) recordUnexpectedCall(err error) {
+func (m *Pool) recordUnexpectedCall(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.unexpectedCalls = append(m.unexpectedCalls, err)
 }
 
 // AllExpectationsMet verifies that all configured expectations have been fulfilled.
-func (m *PGXPool) AllExpectationsMet() error {
+func (m *Pool) AllExpectationsMet() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.unexpectedCalls) > 0 {
@@ -71,13 +71,13 @@ func (m *PGXPool) AllExpectationsMet() error {
 	return nil
 }
 
-func (m *PGXPool) ExpectPing() *PingExpectation {
+func (m *Pool) ExpectPing() *PingExpectation {
 	e := &PingExpectation{basicExpectation: basicExpectation{method: "Ping"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Ping(ctx context.Context) error {
+func (m *Pool) Ping(ctx context.Context) error {
 	e, err := m.findExpectation("Ping")
 	if err != nil {
 		return err
@@ -89,13 +89,13 @@ func (m *PGXPool) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (m *PGXPool) ExpectClose() *CloseExpectation {
+func (m *Pool) ExpectClose() *CloseExpectation {
 	e := &CloseExpectation{basicExpectation: basicExpectation{method: "Close"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Close() {
+func (m *Pool) Close() {
 	e, err := m.findExpectation("Close")
 	if err != nil {
 		m.recordUnexpectedCall(fmt.Errorf("unexpected Close: %w", err))
@@ -109,13 +109,13 @@ func (m *PGXPool) Close() {
 
 type ReleaseExpectation struct{ basicExpectation }
 
-func (m *PGXPool) ExpectRelease() *ReleaseExpectation {
+func (m *Pool) ExpectRelease() *ReleaseExpectation {
 	e := &ReleaseExpectation{basicExpectation: basicExpectation{method: "Release"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Release() {
+func (m *Pool) Release() {
 	e, err := m.findExpectation("Release")
 	if err != nil {
 		m.recordUnexpectedCall(fmt.Errorf("unexpected Release: %w", err))
@@ -125,7 +125,7 @@ func (m *PGXPool) Release() {
 }
 
 // ExpectExec configures an expectation for an Exec operation with the specified query.
-func (m *PGXPool) ExpectExec(query string) *ExecExpectation {
+func (m *Pool) ExpectExec(query string) *ExecExpectation {
 	e := &ExecExpectation{
 		basicExpectation: basicExpectation{
 			method:     "Exec",
@@ -137,7 +137,7 @@ func (m *PGXPool) ExpectExec(query string) *ExecExpectation {
 	return e
 }
 
-func (m *PGXPool) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+func (m *Pool) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
 	e, err := m.findExpectation("Exec", append([]any{query}, args...)...)
 	if err != nil {
 		return pgconn.CommandTag{}, err
@@ -150,7 +150,7 @@ func (m *PGXPool) Exec(ctx context.Context, query string, args ...any) (pgconn.C
 }
 
 // ExpectQuery configures an expectation for a Query operation with the specified query.
-func (m *PGXPool) ExpectQuery(query string) *QueryExpectation {
+func (m *Pool) ExpectQuery(query string) *QueryExpectation {
 	e := &QueryExpectation{
 		basicExpectation: basicExpectation{
 			method:     "Query",
@@ -162,7 +162,7 @@ func (m *PGXPool) ExpectQuery(query string) *QueryExpectation {
 	return e
 }
 
-func (m *PGXPool) Query(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
+func (m *Pool) Query(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
 	e, err := m.findExpectation("Query", append([]any{query}, args...)...)
 	if err != nil {
 		return nil, err
@@ -178,7 +178,7 @@ func (m *PGXPool) Query(ctx context.Context, query string, args ...any) (pgx.Row
 }
 
 // ExpectQueryRow configures an expectation for a QueryRow operation with the specified query.
-func (m *PGXPool) ExpectQueryRow(query string) *QueryRowExpectation {
+func (m *Pool) ExpectQueryRow(query string) *QueryRowExpectation {
 	e := &QueryRowExpectation{
 		basicExpectation: basicExpectation{
 			method:     "QueryRow",
@@ -190,7 +190,7 @@ func (m *PGXPool) ExpectQueryRow(query string) *QueryRowExpectation {
 	return e
 }
 
-func (m *PGXPool) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
+func (m *Pool) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
 	e, err := m.findExpectation("QueryRow", append([]any{query}, args...)...)
 	if err != nil {
 		return &Row{err: err}
@@ -199,13 +199,13 @@ func (m *PGXPool) QueryRow(ctx context.Context, query string, args ...any) pgx.R
 	return ret[0].(pgx.Row)
 }
 
-func (m *PGXPool) ExpectBegin() *BeginExpectation {
+func (m *Pool) ExpectBegin() *BeginExpectation {
 	e := &BeginExpectation{basicExpectation: basicExpectation{method: "Begin"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Begin(ctx context.Context) (pgx.Tx, error) {
+func (m *Pool) Begin(ctx context.Context) (pgx.Tx, error) {
 	e, err := m.findExpectation("Begin")
 	if err != nil {
 		return nil, err
@@ -217,13 +217,13 @@ func (m *PGXPool) Begin(ctx context.Context) (pgx.Tx, error) {
 	return m, nil
 }
 
-func (m *PGXPool) ExpectBeginTx() *BeginTxExpectation {
+func (m *Pool) ExpectBeginTx() *BeginTxExpectation {
 	e := &BeginTxExpectation{basicExpectation: basicExpectation{method: "BeginTx"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
+func (m *Pool) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
 	e, err := m.findExpectation("BeginTx", txOptions)
 	if err != nil {
 		return nil, err
@@ -235,13 +235,13 @@ func (m *PGXPool) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx,
 	return m, nil
 }
 
-func (m *PGXPool) ExpectCommit() *CommitExpectation {
+func (m *Pool) ExpectCommit() *CommitExpectation {
 	e := &CommitExpectation{basicExpectation: basicExpectation{method: "Commit"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Commit(ctx context.Context) error {
+func (m *Pool) Commit(ctx context.Context) error {
 	e, err := m.findExpectation("Commit")
 	if err != nil {
 		return err
@@ -253,13 +253,13 @@ func (m *PGXPool) Commit(ctx context.Context) error {
 	return nil
 }
 
-func (m *PGXPool) ExpectRollback() *RollbackExpectation {
+func (m *Pool) ExpectRollback() *RollbackExpectation {
 	e := &RollbackExpectation{basicExpectation: basicExpectation{method: "Rollback"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Rollback(ctx context.Context) error {
+func (m *Pool) Rollback(ctx context.Context) error {
 	e, err := m.findExpectation("Rollback")
 	if err != nil {
 		return err
@@ -284,13 +284,13 @@ func (e *AcquireExpectation) WillReturnError(err error) {
 }
 
 // ExpectAcquire configures an expectation for acquiring a connection from the pool.
-func (m *PGXPool) ExpectAcquire() *AcquireExpectation {
+func (m *Pool) ExpectAcquire() *AcquireExpectation {
 	e := &AcquireExpectation{basicExpectation: basicExpectation{method: "Acquire", returns: []any{nil, nil}}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
+func (m *Pool) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
 	e, err := m.findExpectation("Acquire")
 	if err != nil {
 		return nil, err
@@ -305,7 +305,7 @@ func (m *PGXPool) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
 	return ret[0].(*pgxpool.Conn), nil
 }
 
-func (m *PGXPool) AcquireSessionConn(ctx context.Context) (opgx.PGXPoolSessionConn, error) {
+func (m *Pool) AcquireSessionConn(ctx context.Context) (opgx.PoolSessionConn, error) {
 	e, err := m.findExpectation("Acquire")
 	if err != nil {
 		return nil, err
@@ -317,7 +317,7 @@ func (m *PGXPool) AcquireSessionConn(ctx context.Context) (opgx.PGXPoolSessionCo
 	if ret[0] == nil {
 		return m, nil
 	}
-	conn, ok := ret[0].(opgx.PGXPoolSessionConn)
+	conn, ok := ret[0].(opgx.PoolSessionConn)
 	if !ok {
 		return nil, fmt.Errorf("acquired connection does not implement opgx.PGXPoolSessionConn")
 	}
@@ -333,14 +333,14 @@ func (e *AcquireFuncExpectation) WillReturnError(err error) {
 }
 
 // ExpectAcquireFunc configures an expectation for AcquireFunc operations.
-func (m *PGXPool) ExpectAcquireFunc() *AcquireFuncExpectation {
+func (m *Pool) ExpectAcquireFunc() *AcquireFuncExpectation {
 	e := &AcquireFuncExpectation{basicExpectation: basicExpectation{method: "AcquireFunc"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
 // AcquireFunc executes fn with a nil connection for mock purposes.
-func (m *PGXPool) AcquireFunc(ctx context.Context, fn func(*pgxpool.Conn) error) error {
+func (m *Pool) AcquireFunc(ctx context.Context, fn func(*pgxpool.Conn) error) error {
 	e, err := m.findExpectation("AcquireFunc")
 	if err != nil {
 		return err
@@ -361,13 +361,13 @@ func (e *AcquireAllIdleExpectation) WillReturnConns(conns []*pgxpool.Conn) {
 }
 
 // ExpectAcquireAllIdle configures an expectation for acquiring all idle connections.
-func (m *PGXPool) ExpectAcquireAllIdle() *AcquireAllIdleExpectation {
+func (m *Pool) ExpectAcquireAllIdle() *AcquireAllIdleExpectation {
 	e := &AcquireAllIdleExpectation{basicExpectation: basicExpectation{method: "AcquireAllIdle"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXPool) AcquireAllIdle(ctx context.Context) []*pgxpool.Conn {
+func (m *Pool) AcquireAllIdle(ctx context.Context) []*pgxpool.Conn {
 	e, err := m.findExpectation("AcquireAllIdle")
 	if err != nil {
 		return nil
@@ -380,7 +380,7 @@ func (m *PGXPool) AcquireAllIdle(ctx context.Context) []*pgxpool.Conn {
 }
 
 // ExpectPrepare configures an expectation for preparing a statement.
-func (m *PGXPool) ExpectPrepare(name, sql string) *PrepareExpectation {
+func (m *Pool) ExpectPrepare(name, sql string) *PrepareExpectation {
 	e := &PrepareExpectation{
 		basicExpectation: basicExpectation{
 			method: "Prepare",
@@ -391,7 +391,7 @@ func (m *PGXPool) ExpectPrepare(name, sql string) *PrepareExpectation {
 	return e
 }
 
-func (m *PGXPool) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
+func (m *Pool) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
 	e, err := m.findExpectation("Prepare", name, sql)
 	if err != nil {
 		return nil, err
@@ -410,7 +410,7 @@ func (m *PGXPool) Prepare(ctx context.Context, name, sql string) (*pgconn.Statem
 }
 
 // ExpectCopyFrom configures an expectation for bulk copy operations.
-func (m *PGXPool) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation {
+func (m *Pool) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation {
 	e := &CopyFromExpectation{
 		basicExpectation: basicExpectation{
 			method: "CopyFrom",
@@ -421,7 +421,7 @@ func (m *PGXPool) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation 
 	return e
 }
 
-func (m *PGXPool) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
+func (m *Pool) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
 	e, err := m.findExpectation("CopyFrom", tableName, columnNames)
 	if err != nil {
 		return 0, err
@@ -437,14 +437,14 @@ func (m *PGXPool) CopyFrom(ctx context.Context, tableName pgx.Identifier, column
 }
 
 // Methods that return nil/defaults for interface compliance
-func (m *PGXPool) Reset()                  {}
-func (m *PGXPool) Config() *pgxpool.Config { return nil }
-func (m *PGXPool) Stat() *pgxpool.Stat     { return nil }
-func (m *PGXPool) LargeObjects() pgx.LargeObjects {
+func (m *Pool) Reset()                  {}
+func (m *Pool) Config() *pgxpool.Config { return nil }
+func (m *Pool) Stat() *pgxpool.Stat     { return nil }
+func (m *Pool) LargeObjects() pgx.LargeObjects {
 	panic("not implemented")
 }
-func (m *PGXPool) Conn() *pgx.Conn { return nil }
+func (m *Pool) Conn() *pgx.Conn { return nil }
 
-func (m *PGXPool) SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults {
+func (m *Pool) SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults {
 	return nil
 }

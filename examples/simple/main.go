@@ -86,7 +86,7 @@ func main() {
 	ctx := context.Background()
 
 	// Step 1: Initialize database connection
-	db, err := octobe.New(pgx.OpenPGXPool(ctx, dsn))
+	db, err := octobe.New(pgx.OpenPool(ctx, dsn))
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

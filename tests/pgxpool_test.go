@@ -16,7 +16,7 @@ type PGXPoolIntegrationSuite struct {
 	suite.Suite
 
 	ctx context.Context
-	db  pgx.PGXPoolDriver
+	db  pgx.PoolDriver
 }
 
 func TestPGXPoolIntegrationSuite(t *testing.T) {
@@ -88,7 +88,7 @@ func (s *PGXPoolIntegrationSuite) TestRunInTransactionRollsBackOnError() {
 func (s *PGXPoolIntegrationSuite) TestManualTransactionCommits() {
 	name := "pgxpool manual commit product"
 
-	session, err := s.db.Transaction(s.ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := s.db.Transaction(s.ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 
@@ -104,7 +104,7 @@ func (s *PGXPoolIntegrationSuite) TestManualTransactionCommits() {
 func (s *PGXPoolIntegrationSuite) TestManualTransactionRollsBack() {
 	name := "pgxpool manual rollback product"
 
-	session, err := s.db.Transaction(s.ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
+	session, err := s.db.Transaction(s.ctx, pgx.WithTxOptions(pgx.TxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 

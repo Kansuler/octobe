@@ -13,7 +13,7 @@ Use Octobe when you want:
 - raw SQL, not an ORM model layer
 - one transaction API for create/read/update flows
 - reusable, typed database operations with HTTP-style handlers
-- pgx/pgxpool support
+- pgx and pgxpool support
 
 ## Quick example
 
@@ -50,7 +50,7 @@ func CreateUser(email string) octobe.Handler[User, pgx.QueryFactory] {
 }
 
 func main() {
-	db, err := octobe.New(pgx.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
+	db, err := octobe.New(pgx.OpenPool(ctx, os.Getenv("DATABASE_URL")))
 	if err != nil {
 		return User{}, err
 	}
@@ -212,7 +212,7 @@ return tx.Commit(ctx)
 Create from a DSN:
 
 ```go
-db, err := octobe.New(pgx.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
+db, err := octobe.New(pgx.OpenPool(ctx, os.Getenv("DATABASE_URL")))
 ```
 
 Or use an existing pool:
@@ -229,7 +229,7 @@ if err != nil {
 	return err
 }
 
-db, err := octobe.New(pgx.OpenPGXWithPool(pool))
+db, err := octobe.New(pgx.OpenWithPool(pool))
 ```
 
 Set transaction options when needed:
@@ -240,7 +240,7 @@ err := db.RunInTransaction(
 	func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		return session.ExecuteNoResult(ctx, RebuildReport())
 	},
-	pgx.WithPGXTxOptions(pgx.PGXTxOptions{IsoLevel: pgx.Serializable}),
+	pgx.WithTxOptions(pgx.TxOptions{IsoLevel: pgx.Serializable}),
 )
 ```
 
@@ -249,9 +249,9 @@ err := db.RunInTransaction(
 ```go
 func TestCreateUser(t *testing.T) {
 	ctx := context.Background()
-	pgxMock := mock.NewPGXPool()
+	pgxMock := mock.NewPool()
 
-	db, err := octobe.New(pgx.OpenPGXWithPool(pgxMock))
+	db, err := octobe.New(pgx.OpenWithPool(pgxMock))
 	require.NoError(t, err)
 
 	pgxMock.ExpectBeginTx()
@@ -298,15 +298,15 @@ The driver contracts are:
 - **`SessionManaged`**: created by `octobe.NewSessionManaged` inside `octobe.RunInTransaction`. It exposes only the three execution methods, leaving transaction lifecycle to Octobe.
 - **`QueryFactory`**: the driver-defined value returned by `Backend.QueryFactory` and passed to `Handler` and `NoResultHandler` functions.
 
-A driver's `RunInTransaction` method can delegate lifecycle to the package helper. Pass the driver's underlying resource type as the first type argument, as the PostgreSQL pool driver does with `PGXPool`:
+A driver's `RunInTransaction` method can delegate lifecycle to the package helper. Pass the driver's underlying resource type as the first type argument, as the PostgreSQL pool driver does with `Pool`:
 
 ```go
-func (d *pgxpoolConn) RunInTransaction(
+func (d *poolConn) RunInTransaction(
 	ctx context.Context,
 	fn func(*octobe.SessionManaged[QueryFactory]) error,
 	opts ...Option,
 ) error {
-	return octobe.RunInTransaction[PGXPool](ctx, d, fn, opts...)
+	return octobe.RunInTransaction[Pool](ctx, d, fn, opts...)
 }
 ```
 

@@ -16,15 +16,22 @@ var (
 	ErrTxCommitRollback = pgx.ErrTxCommitRollback
 )
 
+const (
+	Serializable    = pgx.Serializable
+	RepeatableRead  = pgx.RepeatableRead
+	ReadCommitted   = pgx.ReadCommitted
+	ReadUncommitted = pgx.ReadUncommitted
+)
+
 type (
-	// PGXDriver is the driver interface returned by OpenPGX, OpenPGXWithParseConfigOptions, and OpenPGXWithConn.
-	PGXDriver = octobe.Driver[PGXConn, Config, QueryFactory]
+	// Driver is the driver interface returned by Open, OpenWithParseConfigOptions, and OpenWithConn.
+	Driver = octobe.Driver[Conn, Config, QueryFactory]
 
-	// PGXPoolDriver is the driver interface returned by OpenPGXPool and OpenPGXWithPool.
-	PGXPoolDriver = octobe.Driver[PGXPool, Config, QueryFactory]
+	// PoolDriver is the driver interface returned by OpenPool and OpenWithPool.
+	PoolDriver = octobe.Driver[Pool, Config, QueryFactory]
 
-	// PGXPoolOpenFunc opens a pooled PostgreSQL driver.
-	PGXPoolOpenFunc = octobe.OpenFunc[PGXPool, Config, QueryFactory]
+	// PoolOpenFunc opens a pooled PostgreSQL driver.
+	PoolOpenFunc = octobe.OpenFunc[Pool, Config, QueryFactory]
 
 	// Option configures PostgreSQL driver behavior.
 	Option = octobe.Option[Config]
@@ -33,16 +40,16 @@ type (
 // QueryFactory constructs executable statements from SQL strings.
 type QueryFactory func(query string) Statement
 
-// PGXTxOptions configures transaction behavior and isolation levels.
-type PGXTxOptions pgx.TxOptions
+// TxOptions configures transaction behavior and isolation levels.
+type TxOptions pgx.TxOptions
 
 // Config stores PostgreSQL driver options.
 type Config struct {
-	txOptions *PGXTxOptions
+	txOptions *TxOptions
 }
 
-// WithPGXTxOptions configures transaction options for the session.
-func WithPGXTxOptions(options PGXTxOptions) Option {
+// WithTxOptions configures transaction options for the session.
+func WithTxOptions(options TxOptions) Option {
 	return func(c *Config) {
 		c.txOptions = &options
 	}
@@ -54,7 +61,7 @@ func transactionOptions(opts []Option) []Option {
 	txOpts = append(txOpts, opts...)
 	txOpts = append(txOpts, func(c *Config) {
 		if c.txOptions == nil {
-			c.txOptions = &PGXTxOptions{}
+			c.txOptions = &TxOptions{}
 		}
 	})
 	return txOpts
@@ -113,8 +120,8 @@ type Rows interface {
 
 var _ Rows = (pgx.Rows)(nil)
 
-// PGXConn defines the pgx connection methods used by the driver.
-type PGXConn interface {
+// Conn defines the pgx connection methods used by the driver.
+type Conn interface {
 	Close(context.Context) error
 	Prepare(context.Context, string, string) (*pgconn.StatementDescription, error)
 	Deallocate(context.Context, string) error
@@ -131,17 +138,17 @@ type PGXConn interface {
 	CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error)
 }
 
-var _ PGXConn = &pgx.Conn{}
+var _ Conn = &pgx.Conn{}
 
 type pgxConn struct {
-	conn PGXConn
+	conn Conn
 }
 
-var _ PGXDriver = &pgxConn{}
+var _ Driver = &pgxConn{}
 
-// OpenPGX creates a pgx connection driver from a DSN string.
-func OpenPGX(ctx context.Context, dsn string) octobe.OpenFunc[PGXConn, Config, QueryFactory] {
-	return func() (PGXDriver, error) {
+// Open creates a pgx connection driver from a DSN string.
+func Open(ctx context.Context, dsn string) octobe.OpenFunc[Conn, Config, QueryFactory] {
+	return func() (Driver, error) {
 		conn, err := pgx.Connect(ctx, dsn)
 		if err != nil {
 			return nil, err
@@ -158,9 +165,9 @@ type ParseConfigOptions struct {
 	pgconn.ParseConfigOptions
 }
 
-// OpenPGXWithParseConfigOptions creates a pgx connection driver with custom parse options.
-func OpenPGXWithParseConfigOptions(ctx context.Context, dsn string, options ParseConfigOptions) octobe.OpenFunc[PGXConn, Config, QueryFactory] {
-	return func() (PGXDriver, error) {
+// OpenWithParseConfigOptions creates a pgx connection driver with custom parse options.
+func OpenWithParseConfigOptions(ctx context.Context, dsn string, options ParseConfigOptions) octobe.OpenFunc[Conn, Config, QueryFactory] {
+	return func() (Driver, error) {
 		conn, err := pgx.ConnectWithOptions(ctx, dsn, pgx.ParseConfigOptions{ParseConfigOptions: options.ParseConfigOptions})
 		if err != nil {
 			return nil, err
@@ -172,9 +179,9 @@ func OpenPGXWithParseConfigOptions(ctx context.Context, dsn string, options Pars
 	}
 }
 
-// OpenPGXWithConn creates a driver from an existing pgx connection.
-func OpenPGXWithConn(conn PGXConn) octobe.OpenFunc[PGXConn, Config, QueryFactory] {
-	return func() (PGXDriver, error) {
+// OpenWithConn creates a driver from an existing pgx connection.
+func OpenWithConn(conn Conn) octobe.OpenFunc[Conn, Config, QueryFactory] {
+	return func() (Driver, error) {
 		if conn == nil {
 			return nil, errors.New("conn is nil")
 		}
@@ -240,7 +247,7 @@ func (d *pgxConn) Ping(ctx context.Context) error {
 
 // RunInTransaction runs fn in a transaction managed by Octobe.
 func (d *pgxConn) RunInTransaction(ctx context.Context, fn func(session *octobe.SessionManaged[QueryFactory]) error, opts ...Option) (err error) {
-	return octobe.RunInTransaction[PGXConn](ctx, d, fn, opts...)
+	return octobe.RunInTransaction[Conn](ctx, d, fn, opts...)
 }
 
 // pgxSession implements octobe.Backend for a pgx connection or transaction.

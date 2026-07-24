@@ -28,7 +28,7 @@ func integrationDSN(t *testing.T) string {
 	return dsn
 }
 
-func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGXDriver {
+func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.Driver {
 	t.Helper()
 
 	deadline := time.Now().Add(8 * time.Second)
@@ -36,7 +36,7 @@ func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGXDriv
 
 	for {
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Second)
-		db, err := octobe.New(pgx.OpenPGX(attemptCtx, dsn))
+		db, err := octobe.New(pgx.Open(attemptCtx, dsn))
 		cancel()
 		if err == nil {
 			pingCtx, pingCancel := context.WithTimeout(ctx, time.Second)
@@ -56,7 +56,7 @@ func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGXDriv
 	}
 }
 
-func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGXPoolDriver {
+func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PoolDriver {
 	t.Helper()
 
 	deadline := time.Now().Add(8 * time.Second)
@@ -64,7 +64,7 @@ func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGX
 
 	for {
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Second)
-		db, err := octobe.New(pgx.OpenPGXPool(attemptCtx, dsn))
+		db, err := octobe.New(pgx.OpenPool(attemptCtx, dsn))
 		cancel()
 		if err == nil {
 			pingCtx, pingCancel := context.WithTimeout(ctx, time.Second)

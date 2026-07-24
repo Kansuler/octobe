@@ -21,8 +21,8 @@ type PGXConn struct {
 }
 
 var (
-	_ opgx.PGXConn = (*PGXConn)(nil)
-	_ pgx.Tx       = (*PGXConn)(nil)
+	_ opgx.Conn = (*PGXConn)(nil)
+	_ pgx.Tx    = (*PGXConn)(nil)
 )
 
 // NewPGXConn creates a new mock database connection for testing.
