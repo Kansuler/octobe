@@ -43,6 +43,9 @@ type QueryFactory func(query string) Statement
 // TxOptions configures transaction behavior and isolation levels.
 type TxOptions pgx.TxOptions
 
+// Identifier is a PostgreSQL identifier string.
+type Identifier = pgx.Identifier
+
 // Config stores PostgreSQL driver options.
 type Config struct {
 	txOptions *TxOptions
