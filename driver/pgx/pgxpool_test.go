@@ -12,7 +12,7 @@ import (
 )
 
 func TestPGXPoolRunInTransactionCommits(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	name := "Some name"
@@ -74,7 +74,7 @@ func TestPGXPoolRunInTransactionCommits(t *testing.T) {
 }
 
 func TestPGXPoolManualTransactionCommits(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	name := "Some name"
@@ -136,7 +136,7 @@ func TestPGXPoolManualTransactionCommits(t *testing.T) {
 }
 
 func TestPGXPoolNonTransactionalSessionExecutesHandlers(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	name := "Some name"
@@ -197,7 +197,7 @@ func TestPGXPoolNonTransactionalSessionExecutesHandlers(t *testing.T) {
 }
 
 func TestPGXPoolNonTransactionalSessionCloseReleasesConnection(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	m.ExpectAcquire()
@@ -218,7 +218,7 @@ func TestPGXPoolNonTransactionalSessionCloseReleasesConnection(t *testing.T) {
 }
 
 func TestPGXPoolRunInTransactionRollsBackOnError(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	expectedErr := errors.New("some error")
@@ -245,7 +245,7 @@ func TestPGXPoolRunInTransactionRollsBackOnError(t *testing.T) {
 }
 
 func TestPGXPoolRunInTransactionRollsBackOnPanic(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	m.ExpectBeginTx()
@@ -273,7 +273,7 @@ func TestPGXPoolRunInTransactionRollsBackOnPanic(t *testing.T) {
 }
 
 func TestPGXPoolManualTransactionRollsBack(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	name := "Some name"
@@ -317,7 +317,7 @@ func TestPGXPoolManualTransactionRollsBack(t *testing.T) {
 }
 
 func TestPGXPoolStatementCannotBeReused(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	name := "Some name"
@@ -412,7 +412,7 @@ func TestOpenPGXWithPoolNil(t *testing.T) {
 }
 
 func TestPGXPoolBeginTxReturnsDriverError(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	expectedErr := errors.New("begin error")
@@ -430,7 +430,7 @@ func TestPGXPoolBeginTxReturnsDriverError(t *testing.T) {
 }
 
 func TestPGXPoolCommitReturnsDriverError(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	expectedErr := errors.New("commit error")
@@ -454,7 +454,7 @@ func TestPGXPoolCommitReturnsDriverError(t *testing.T) {
 }
 
 func TestPGXPoolStatementExecError(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	expectedErr := errors.New("exec error")
@@ -511,7 +511,7 @@ func TestPGXPoolStatementExecError(t *testing.T) {
 }
 
 func TestPGXPoolStatementQueryRowError(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	expectedErr := errors.New("query row error")
@@ -570,7 +570,7 @@ func TestPGXPoolStatementQueryRowError(t *testing.T) {
 }
 
 func TestPGXPoolStatementQueryError(t *testing.T) {
-	m := mock.NewPGXPool()
+	m := mock.NewPool()
 	ctx := context.Background()
 
 	expectedErr := errors.New("query error")

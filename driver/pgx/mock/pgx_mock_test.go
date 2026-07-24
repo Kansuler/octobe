@@ -16,7 +16,7 @@ func TestMock(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Ping success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -27,7 +27,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Ping error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -41,7 +41,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Close success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -52,7 +52,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Exec success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
@@ -70,7 +70,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Exec error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
@@ -89,7 +89,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Query success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
@@ -121,7 +121,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Query error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
@@ -142,7 +142,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("QueryRow success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
@@ -162,7 +162,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("QueryRow error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 		session, err := o.Session(ctx)
@@ -183,7 +183,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Transaction success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -201,7 +201,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Transaction with exec", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Transaction rollback", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -244,7 +244,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Unfulfilled expectations", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		mock.ExpectPing()
 		mock.ExpectClose()
 
@@ -254,7 +254,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("No more expectations", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -264,7 +264,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Expectation order mismatch", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		o, err := octobe.New(opgx.OpenWithConn(mock))
 		require.NoError(t, err)
 
@@ -278,7 +278,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Prepare success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		name := "test_stmt"
 		sql := "SELECT * FROM users WHERE id = $1"
@@ -293,7 +293,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Prepare error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		name := "test_stmt"
 		sql := "SELECT * FROM users WHERE id = $1"
@@ -308,7 +308,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Deallocate success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		name := "test_stmt"
 		mock.ExpectDeallocate(name)
@@ -319,7 +319,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Deallocate error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		name := "test_stmt"
 		expectedErr := errors.New("deallocate failed")
@@ -332,7 +332,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("DeallocateAll success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		mock.ExpectDeallocateAll()
 
@@ -342,7 +342,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("DeallocateAll error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		expectedErr := errors.New("deallocate all failed")
 		mock.ExpectDeallocateAll().WillReturnError(expectedErr)
@@ -354,7 +354,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("CopyFrom success", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		tableName := pgx.Identifier{"users"}
 		columns := []string{"name", "email"}
@@ -367,7 +367,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("CopyFrom error", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 
 		tableName := pgx.Identifier{"users"}
 		columns := []string{"name", "email"}
@@ -438,7 +438,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Exact query matching rejects extra SQL", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		mock.ExpectExec("SELECT id FROM users").WillReturnResult(pgconn.CommandTag{})
 
 		_, err := mock.Exec(ctx, "SELECT id FROM users WHERE active = true")
@@ -448,7 +448,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Contains query matching", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		mock.ExpectExec("SELECT id FROM users").Contains().WillReturnResult(pgconn.CommandTag{})
 
 		_, err := mock.Exec(ctx, "SELECT id FROM users WHERE active = true")
@@ -457,7 +457,7 @@ func TestMock(t *testing.T) {
 	})
 
 	t.Run("Regex query matching", func(t *testing.T) {
-		mock := NewPGXConn()
+		mock := NewConn()
 		mock.ExpectQueryRow(`SELECT id FROM users WHERE id = \d+`).Regex().WillReturnRow(NewRow(7))
 
 		var id int

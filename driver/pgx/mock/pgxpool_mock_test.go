@@ -17,7 +17,7 @@ func TestPoolMock(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Ping success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -28,7 +28,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Ping error", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -42,7 +42,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Close success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -53,7 +53,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Exec success without tx", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
@@ -73,7 +73,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Exec error without tx", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
@@ -94,7 +94,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Query success without tx", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
@@ -128,7 +128,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Query error without tx", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
@@ -151,7 +151,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("QueryRow success without tx", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
@@ -173,7 +173,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("QueryRow error without tx", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
@@ -196,7 +196,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Session close releases acquired connection", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -210,7 +210,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Transaction success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -228,7 +228,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Transaction with exec", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -253,7 +253,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Transaction rollback", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -271,7 +271,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Unfulfilled expectations", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		mock.ExpectPing()
 		mock.ExpectClose()
 
@@ -281,7 +281,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("No more expectations", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -291,7 +291,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Expectation order mismatch", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 		o, err := octobe.New(opgx.OpenWithPool(mock))
 		require.NoError(t, err)
 
@@ -305,7 +305,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Acquire success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		mock.ExpectAcquire().WillReturnConn(nil) // Using nil for simplicity in tests
 
@@ -316,7 +316,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Acquire error", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		expectedErr := errors.New("acquire failed")
 		mock.ExpectAcquire().WillReturnError(expectedErr)
@@ -329,7 +329,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("AcquireFunc success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		mock.ExpectAcquireFunc()
 
@@ -344,7 +344,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("AcquireFunc error", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		expectedErr := errors.New("acquire func failed")
 		mock.ExpectAcquireFunc().WillReturnError(expectedErr)
@@ -358,7 +358,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("AcquireAllIdle success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		expectedConns := []*pgxpool.Conn{}
 		mock.ExpectAcquireAllIdle().WillReturnConns(expectedConns)
@@ -369,7 +369,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Prepare success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		name := "test_stmt"
 		sql := "SELECT * FROM users WHERE id = $1"
@@ -384,7 +384,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Prepare error", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		name := "test_stmt"
 		sql := "SELECT * FROM users WHERE id = $1"
@@ -399,7 +399,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("CopyFrom success", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		tableName := pgx.Identifier{"users"}
 		columns := []string{"name", "email"}
@@ -412,7 +412,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("CopyFrom error", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		tableName := pgx.Identifier{"users"}
 		columns := []string{"name", "email"}
@@ -427,7 +427,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Unexpected Close is reported", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		mock.Close()
 
@@ -437,7 +437,7 @@ func TestPoolMock(t *testing.T) {
 	})
 
 	t.Run("Unexpected Release is reported", func(t *testing.T) {
-		mock := NewPGXPool()
+		mock := NewPool()
 
 		mock.Release()
 

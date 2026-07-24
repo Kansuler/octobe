@@ -12,7 +12,7 @@ import (
 )
 
 func TestPGXRunInTransactionCommits(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	m.ExpectBeginTx()
 	name := "Some name"
 	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
@@ -59,7 +59,7 @@ func TestPGXRunInTransactionCommits(t *testing.T) {
 }
 
 func TestPGXManualTransactionCommits(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	name := "Some name"
 
 	m.ExpectBeginTx()
@@ -115,7 +115,7 @@ func TestPGXManualTransactionCommits(t *testing.T) {
 }
 
 func TestPGXNonTransactionalSessionExecutesHandlers(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	name := "Some name"
 
 	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
@@ -219,7 +219,7 @@ func ProductsByName(name string) octobe.Handler[[]Product, pgx.QueryFactory] {
 }
 
 func TestPGXRunInTransactionRollsBackOnError(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	m.ExpectBeginTx()
 	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
 	m.ExpectRollback()
@@ -249,7 +249,7 @@ func TestPGXRunInTransactionRollsBackOnError(t *testing.T) {
 }
 
 func TestPGXRunInTransactionRollsBackOnPanic(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	m.ExpectBeginTx()
 	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
 	m.ExpectRollback()
@@ -281,7 +281,7 @@ func TestPGXRunInTransactionRollsBackOnPanic(t *testing.T) {
 }
 
 func TestPGXManualTransactionRollsBack(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	name := "Some name"
 
 	m.ExpectBeginTx()
@@ -324,7 +324,7 @@ func TestPGXManualTransactionRollsBack(t *testing.T) {
 
 func TestPGXStatementCannotBeReused(t *testing.T) {
 	t.Run("Exec", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		m.ExpectExec("CREATE TABLE").WillReturnResult(mock.NewResult("", 0))
 		m.ExpectClose()
 
@@ -360,7 +360,7 @@ func TestPGXStatementCannotBeReused(t *testing.T) {
 	})
 
 	t.Run("QueryRow", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		name := "Some name"
 
 		m.ExpectQueryRow("SELECT").WillReturnRow(mock.NewRow(1, name))
@@ -399,7 +399,7 @@ func TestPGXStatementCannotBeReused(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		m.ExpectQuery("SELECT").WillReturnRows(mock.NewRows([]string{"id", "name"}))
 		m.ExpectClose()
 
@@ -446,7 +446,7 @@ func TestOpenPGXWithConnRejectsNil(t *testing.T) {
 }
 
 func TestPGXBeginTxReturnsDriverError(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	expectedErr := errors.New("begin error")
 	m.ExpectBeginTx().WillReturnError(expectedErr)
 	m.ExpectClose()
@@ -466,7 +466,7 @@ func TestPGXBeginTxReturnsDriverError(t *testing.T) {
 }
 
 func TestPGXCommitReturnsDriverError(t *testing.T) {
-	m := mock.NewPGXConn()
+	m := mock.NewConn()
 	expectedErr := errors.New("commit error")
 	m.ExpectBeginTx()
 	m.ExpectCommit().WillReturnError(expectedErr)
@@ -493,7 +493,7 @@ func TestPGXCommitReturnsDriverError(t *testing.T) {
 
 func TestPGXStatementExecError(t *testing.T) {
 	t.Run("without tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("exec error")
 		m.ExpectExec("INSERT").WillReturnError(expectedErr)
 		m.ExpectClose()
@@ -523,7 +523,7 @@ func TestPGXStatementExecError(t *testing.T) {
 	})
 
 	t.Run("with tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("exec error")
 		m.ExpectBeginTx()
 		m.ExpectExec("INSERT").WillReturnError(expectedErr)
@@ -556,7 +556,7 @@ func TestPGXStatementExecError(t *testing.T) {
 
 func TestPGXStatementQueryRowError(t *testing.T) {
 	t.Run("without tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("query row error")
 		m.ExpectQueryRow("SELECT").WillReturnRow(mock.NewRow().WillReturnError(expectedErr))
 		m.ExpectClose()
@@ -587,7 +587,7 @@ func TestPGXStatementQueryRowError(t *testing.T) {
 	})
 
 	t.Run("with tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("query row error")
 		m.ExpectBeginTx()
 		m.ExpectQueryRow("SELECT").WillReturnRow(mock.NewRow().WillReturnError(expectedErr))
@@ -621,7 +621,7 @@ func TestPGXStatementQueryRowError(t *testing.T) {
 
 func TestPGXStatementQueryError(t *testing.T) {
 	t.Run("query error without tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("query error")
 		m.ExpectQuery("SELECT").WillReturnError(expectedErr)
 		m.ExpectClose()
@@ -651,7 +651,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 	})
 
 	t.Run("query error with tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("query error")
 		m.ExpectBeginTx()
 		m.ExpectQuery("SELECT").WillReturnError(expectedErr)
@@ -682,7 +682,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 	})
 
 	t.Run("callback error without tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("callback error")
 		m.ExpectQuery("SELECT").WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
 		m.ExpectClose()
@@ -712,7 +712,7 @@ func TestPGXStatementQueryError(t *testing.T) {
 	})
 
 	t.Run("callback error with tx", func(t *testing.T) {
-		m := mock.NewPGXConn()
+		m := mock.NewConn()
 		expectedErr := errors.New("callback error")
 		m.ExpectBeginTx()
 		m.ExpectQuery("SELECT").WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))

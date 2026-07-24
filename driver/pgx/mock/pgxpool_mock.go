@@ -27,8 +27,8 @@ var (
 	_ pgx.Tx                       = (*Pool)(nil)
 )
 
-// NewPGXPool creates a new mock database connection pool for testing.
-func NewPGXPool() *Pool {
+// NewPool creates a new mock database connection pool for testing.
+func NewPool() *Pool {
 	return &Pool{}
 }
 
@@ -319,7 +319,7 @@ func (m *Pool) AcquireSessionConn(ctx context.Context) (opgx.PoolSessionConn, er
 	}
 	conn, ok := ret[0].(opgx.PoolSessionConn)
 	if !ok {
-		return nil, fmt.Errorf("acquired connection does not implement opgx.PGXPoolSessionConn")
+		return nil, fmt.Errorf("acquired connection does not implement pgx.PoolSessionConn")
 	}
 	return conn, nil
 }

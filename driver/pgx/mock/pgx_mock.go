@@ -13,25 +13,25 @@ import (
 
 var ErrNoExpectation = errors.New("no expectation found")
 
-// PGXConn provides a mock implementation of opgx.PGXConn and pgx.Tx interfaces
+// Conn provides a mock implementation of opgx.Conn and pgx.Tx interfaces
 // for testing database interactions without requiring an actual database connection.
-type PGXConn struct {
+type Conn struct {
 	mu           sync.Mutex
 	expectations []expectation
 }
 
 var (
-	_ opgx.Conn = (*PGXConn)(nil)
-	_ pgx.Tx    = (*PGXConn)(nil)
+	_ opgx.Conn = (*Conn)(nil)
+	_ pgx.Tx    = (*Conn)(nil)
 )
 
-// NewPGXConn creates a new mock database connection for testing.
-func NewPGXConn() *PGXConn {
-	return &PGXConn{}
+// NewConn creates a new mock database connection for testing.
+func NewConn() *Conn {
+	return &Conn{}
 }
 
 // findExpectation locates the first unfulfilled expectation matching the method and arguments.
-func (m *PGXConn) findExpectation(method string, args ...any) (expectation, error) {
+func (m *Conn) findExpectation(method string, args ...any) (expectation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -49,7 +49,7 @@ func (m *PGXConn) findExpectation(method string, args ...any) (expectation, erro
 }
 
 // AllExpectationsMet verifies that all configured expectations have been fulfilled.
-func (m *PGXConn) AllExpectationsMet() error {
+func (m *Conn) AllExpectationsMet() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, e := range m.expectations {
@@ -60,13 +60,13 @@ func (m *PGXConn) AllExpectationsMet() error {
 	return nil
 }
 
-func (m *PGXConn) ExpectPing() *PingExpectation {
+func (m *Conn) ExpectPing() *PingExpectation {
 	e := &PingExpectation{basicExpectation: basicExpectation{method: "Ping"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXConn) Ping(ctx context.Context) error {
+func (m *Conn) Ping(ctx context.Context) error {
 	e, err := m.findExpectation("Ping")
 	if err != nil {
 		return err
@@ -78,13 +78,13 @@ func (m *PGXConn) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (m *PGXConn) ExpectClose() *CloseExpectation {
+func (m *Conn) ExpectClose() *CloseExpectation {
 	e := &CloseExpectation{basicExpectation: basicExpectation{method: "Close"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXConn) Close(ctx context.Context) error {
+func (m *Conn) Close(ctx context.Context) error {
 	e, err := m.findExpectation("Close")
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (m *PGXConn) Close(ctx context.Context) error {
 }
 
 // ExpectExec configures an expectation for an Exec operation with the specified query.
-func (m *PGXConn) ExpectExec(query string) *ExecExpectation {
+func (m *Conn) ExpectExec(query string) *ExecExpectation {
 	e := &ExecExpectation{
 		basicExpectation: basicExpectation{
 			method:     "Exec",
@@ -109,7 +109,7 @@ func (m *PGXConn) ExpectExec(query string) *ExecExpectation {
 	return e
 }
 
-func (m *PGXConn) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+func (m *Conn) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
 	e, err := m.findExpectation("Exec", append([]any{query}, args...)...)
 	if err != nil {
 		return pgconn.CommandTag{}, err
@@ -122,7 +122,7 @@ func (m *PGXConn) Exec(ctx context.Context, query string, args ...any) (pgconn.C
 }
 
 // ExpectQuery configures an expectation for a Query operation with the specified query.
-func (m *PGXConn) ExpectQuery(query string) *QueryExpectation {
+func (m *Conn) ExpectQuery(query string) *QueryExpectation {
 	e := &QueryExpectation{
 		basicExpectation: basicExpectation{
 			method:     "Query",
@@ -134,7 +134,7 @@ func (m *PGXConn) ExpectQuery(query string) *QueryExpectation {
 	return e
 }
 
-func (m *PGXConn) Query(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
+func (m *Conn) Query(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
 	e, err := m.findExpectation("Query", append([]any{query}, args...)...)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (m *PGXConn) Query(ctx context.Context, query string, args ...any) (pgx.Row
 }
 
 // ExpectQueryRow configures an expectation for a QueryRow operation with the specified query.
-func (m *PGXConn) ExpectQueryRow(query string) *QueryRowExpectation {
+func (m *Conn) ExpectQueryRow(query string) *QueryRowExpectation {
 	e := &QueryRowExpectation{
 		basicExpectation: basicExpectation{
 			method:     "QueryRow",
@@ -162,7 +162,7 @@ func (m *PGXConn) ExpectQueryRow(query string) *QueryRowExpectation {
 	return e
 }
 
-func (m *PGXConn) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
+func (m *Conn) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
 	e, err := m.findExpectation("QueryRow", append([]any{query}, args...)...)
 	if err != nil {
 		return &Row{err: err}
@@ -171,13 +171,13 @@ func (m *PGXConn) QueryRow(ctx context.Context, query string, args ...any) pgx.R
 	return ret[0].(pgx.Row)
 }
 
-func (m *PGXConn) ExpectBegin() *BeginExpectation {
+func (m *Conn) ExpectBegin() *BeginExpectation {
 	e := &BeginExpectation{basicExpectation: basicExpectation{method: "Begin"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXConn) Begin(ctx context.Context) (pgx.Tx, error) {
+func (m *Conn) Begin(ctx context.Context) (pgx.Tx, error) {
 	e, err := m.findExpectation("Begin")
 	if err != nil {
 		return nil, err
@@ -189,13 +189,13 @@ func (m *PGXConn) Begin(ctx context.Context) (pgx.Tx, error) {
 	return m, nil
 }
 
-func (m *PGXConn) ExpectBeginTx() *BeginTxExpectation {
+func (m *Conn) ExpectBeginTx() *BeginTxExpectation {
 	e := &BeginTxExpectation{basicExpectation: basicExpectation{method: "BeginTx"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXConn) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
+func (m *Conn) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
 	e, err := m.findExpectation("BeginTx", txOptions)
 	if err != nil {
 		return nil, err
@@ -207,13 +207,13 @@ func (m *PGXConn) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx,
 	return m, nil
 }
 
-func (m *PGXConn) ExpectCommit() *CommitExpectation {
+func (m *Conn) ExpectCommit() *CommitExpectation {
 	e := &CommitExpectation{basicExpectation: basicExpectation{method: "Commit"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXConn) Commit(ctx context.Context) error {
+func (m *Conn) Commit(ctx context.Context) error {
 	e, err := m.findExpectation("Commit")
 	if err != nil {
 		return err
@@ -225,13 +225,13 @@ func (m *PGXConn) Commit(ctx context.Context) error {
 	return nil
 }
 
-func (m *PGXConn) ExpectRollback() *RollbackExpectation {
+func (m *Conn) ExpectRollback() *RollbackExpectation {
 	e := &RollbackExpectation{basicExpectation: basicExpectation{method: "Rollback"}}
 	m.expectations = append(m.expectations, e)
 	return e
 }
 
-func (m *PGXConn) Rollback(ctx context.Context) error {
+func (m *Conn) Rollback(ctx context.Context) error {
 	e, err := m.findExpectation("Rollback")
 	if err != nil {
 		return err
@@ -261,7 +261,7 @@ func (e *PrepareExpectation) WillReturnError(err error) {
 }
 
 // ExpectPrepare configures an expectation for preparing a statement.
-func (m *PGXConn) ExpectPrepare(name, sql string) *PrepareExpectation {
+func (m *Conn) ExpectPrepare(name, sql string) *PrepareExpectation {
 	e := &PrepareExpectation{
 		basicExpectation: basicExpectation{
 			method: "Prepare",
@@ -272,7 +272,7 @@ func (m *PGXConn) ExpectPrepare(name, sql string) *PrepareExpectation {
 	return e
 }
 
-func (m *PGXConn) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
+func (m *Conn) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
 	e, err := m.findExpectation("Prepare", name, sql)
 	if err != nil {
 		return nil, err
@@ -298,7 +298,7 @@ func (e *DeallocateExpectation) WillReturnError(err error) {
 	e.returns = []any{err}
 }
 
-func (m *PGXConn) ExpectDeallocate(name string) *DeallocateExpectation {
+func (m *Conn) ExpectDeallocate(name string) *DeallocateExpectation {
 	e := &DeallocateExpectation{
 		basicExpectation: basicExpectation{
 			method: "Deallocate",
@@ -309,7 +309,7 @@ func (m *PGXConn) ExpectDeallocate(name string) *DeallocateExpectation {
 	return e
 }
 
-func (m *PGXConn) Deallocate(ctx context.Context, name string) error {
+func (m *Conn) Deallocate(ctx context.Context, name string) error {
 	e, err := m.findExpectation("Deallocate", name)
 	if err != nil {
 		return err
@@ -329,7 +329,7 @@ func (e *DeallocateAllExpectation) WillReturnError(err error) {
 	e.returns = []any{err}
 }
 
-func (m *PGXConn) ExpectDeallocateAll() *DeallocateAllExpectation {
+func (m *Conn) ExpectDeallocateAll() *DeallocateAllExpectation {
 	e := &DeallocateAllExpectation{
 		basicExpectation: basicExpectation{method: "DeallocateAll"},
 	}
@@ -337,7 +337,7 @@ func (m *PGXConn) ExpectDeallocateAll() *DeallocateAllExpectation {
 	return e
 }
 
-func (m *PGXConn) DeallocateAll(ctx context.Context) error {
+func (m *Conn) DeallocateAll(ctx context.Context) error {
 	e, err := m.findExpectation("DeallocateAll")
 	if err != nil {
 		return err
@@ -367,7 +367,7 @@ func (e *CopyFromExpectation) WillReturnError(err error) {
 }
 
 // ExpectCopyFrom configures an expectation for bulk copy operations.
-func (m *PGXConn) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation {
+func (m *Conn) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation {
 	e := &CopyFromExpectation{
 		basicExpectation: basicExpectation{
 			method: "CopyFrom",
@@ -378,7 +378,7 @@ func (m *PGXConn) ExpectCopyFrom(tableName pgx.Identifier) *CopyFromExpectation 
 	return e
 }
 
-func (m *PGXConn) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
+func (m *Conn) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
 	e, err := m.findExpectation("CopyFrom", tableName, columnNames)
 	if err != nil {
 		return 0, err
@@ -394,13 +394,13 @@ func (m *PGXConn) CopyFrom(ctx context.Context, tableName pgx.Identifier, column
 }
 
 // Methods that return nil/defaults for interface compliance
-func (m *PGXConn) PgConn() *pgconn.PgConn  { return nil }
-func (m *PGXConn) Config() *pgx.ConnConfig { return nil }
-func (m *PGXConn) LargeObjects() pgx.LargeObjects {
+func (m *Conn) PgConn() *pgconn.PgConn  { return nil }
+func (m *Conn) Config() *pgx.ConnConfig { return nil }
+func (m *Conn) LargeObjects() pgx.LargeObjects {
 	panic("not implemented")
 }
-func (m *PGXConn) Conn() *pgx.Conn { return nil }
+func (m *Conn) Conn() *pgx.Conn { return nil }
 
-func (m *PGXConn) SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults {
+func (m *Conn) SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults {
 	return nil
 }
