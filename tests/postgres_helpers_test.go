@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/pgx"
 )
 
 type integrationProduct struct {
@@ -28,7 +28,7 @@ func integrationDSN(t *testing.T) string {
 	return dsn
 }
 
-func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) postgres.PGXDriver {
+func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGXDriver {
 	t.Helper()
 
 	deadline := time.Now().Add(8 * time.Second)
@@ -36,7 +36,7 @@ func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) postgres.PG
 
 	for {
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Second)
-		db, err := octobe.New(postgres.OpenPGX(attemptCtx, dsn))
+		db, err := octobe.New(pgx.OpenPGX(attemptCtx, dsn))
 		cancel()
 		if err == nil {
 			pingCtx, pingCancel := context.WithTimeout(ctx, time.Second)
@@ -56,7 +56,7 @@ func openPGXWithRetry(t *testing.T, ctx context.Context, dsn string) postgres.PG
 	}
 }
 
-func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) postgres.PGXPoolDriver {
+func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) pgx.PGXPoolDriver {
 	t.Helper()
 
 	deadline := time.Now().Add(8 * time.Second)
@@ -64,7 +64,7 @@ func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) postgre
 
 	for {
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Second)
-		db, err := octobe.New(postgres.OpenPGXPool(attemptCtx, dsn))
+		db, err := octobe.New(pgx.OpenPGXPool(attemptCtx, dsn))
 		cancel()
 		if err == nil {
 			pingCtx, pingCancel := context.WithTimeout(ctx, time.Second)
@@ -84,8 +84,8 @@ func openPGXPoolWithRetry(t *testing.T, ctx context.Context, dsn string) postgre
 	}
 }
 
-func migrateProducts(table string) octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) error {
+func migrateProducts(table string) octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) error {
 		_, err := newQuery(fmt.Sprintf(`
 			CREATE TABLE IF NOT EXISTS %s (
 				id SERIAL PRIMARY KEY,
@@ -96,22 +96,22 @@ func migrateProducts(table string) octobe.NoResultHandler[postgres.QueryFactory]
 	}
 }
 
-func truncateProducts(table string) octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) error {
+func truncateProducts(table string) octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) error {
 		_, err := newQuery(fmt.Sprintf(`TRUNCATE TABLE %s RESTART IDENTITY`, quoteIdentifier(table))).Exec(ctx)
 		return err
 	}
 }
 
-func dropProducts(table string) octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) error {
+func dropProducts(table string) octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) error {
 		_, err := newQuery(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quoteIdentifier(table))).Exec(ctx)
 		return err
 	}
 }
 
-func createProduct(table, name string) octobe.Handler[integrationProduct, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (integrationProduct, error) {
+func createProduct(table, name string) octobe.Handler[integrationProduct, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (integrationProduct, error) {
 		var product integrationProduct
 		err := newQuery(fmt.Sprintf(`
 			INSERT INTO %s (name)
@@ -122,8 +122,8 @@ func createProduct(table, name string) octobe.Handler[integrationProduct, postgr
 	}
 }
 
-func productByID(table string, id int) octobe.Handler[integrationProduct, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (integrationProduct, error) {
+func productByID(table string, id int) octobe.Handler[integrationProduct, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (integrationProduct, error) {
 		var product integrationProduct
 		err := newQuery(fmt.Sprintf(`
 			SELECT id, name
@@ -134,15 +134,15 @@ func productByID(table string, id int) octobe.Handler[integrationProduct, postgr
 	}
 }
 
-func productsByName(table, name string) octobe.Handler[[]integrationProduct, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) ([]integrationProduct, error) {
+func productsByName(table, name string) octobe.Handler[[]integrationProduct, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) ([]integrationProduct, error) {
 		var products []integrationProduct
 		err := newQuery(fmt.Sprintf(`
 			SELECT id, name
 			FROM %s
 			WHERE name = $1
 			ORDER BY id
-		`, quoteIdentifier(table))).WithArgs(name).Query(ctx, func(rows postgres.Rows) error {
+		`, quoteIdentifier(table))).WithArgs(name).Query(ctx, func(rows pgx.Rows) error {
 			for rows.Next() {
 				var product integrationProduct
 				if err := rows.Scan(&product.ID, &product.Name); err != nil {
@@ -156,8 +156,8 @@ func productsByName(table, name string) octobe.Handler[[]integrationProduct, pos
 	}
 }
 
-func backendPID() octobe.Handler[int, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (int, error) {
+func backendPID() octobe.Handler[int, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (int, error) {
 		var pid int
 		err := newQuery(`SELECT pg_backend_pid()`).QueryRow(ctx, &pid)
 		return pid, err

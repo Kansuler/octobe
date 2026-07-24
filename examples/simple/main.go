@@ -9,7 +9,7 @@ import (
 	"os"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/pgx"
 )
 
 // Simple data model
@@ -20,8 +20,8 @@ type User struct {
 }
 
 // Create table handler
-func EnsureUsersTable() octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, query postgres.QueryFactory) error {
+func EnsureUsersTable() octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, query pgx.QueryFactory) error {
 		_, err := query(`
 			CREATE TABLE IF NOT EXISTS users (
 				id SERIAL PRIMARY KEY,
@@ -33,8 +33,8 @@ func EnsureUsersTable() octobe.NoResultHandler[postgres.QueryFactory] {
 }
 
 // Create user handler
-func CreateUser(name, email string) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
+func CreateUser(name, email string) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, query pgx.QueryFactory) (User, error) {
 		var user User
 		err := query(`
 			INSERT INTO users (name, email)
@@ -47,8 +47,8 @@ func CreateUser(name, email string) octobe.Handler[User, postgres.QueryFactory] 
 }
 
 // Get user by ID handler
-func GetUserByID(id int) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
+func GetUserByID(id int) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, query pgx.QueryFactory) (User, error) {
 		var user User
 		err := query(`
 			SELECT id, name, email
@@ -61,8 +61,8 @@ func GetUserByID(id int) octobe.Handler[User, postgres.QueryFactory] {
 }
 
 // Update user handler
-func UpdateUser(id int, name, email string) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
+func UpdateUser(id int, name, email string) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, query pgx.QueryFactory) (User, error) {
 		var user User
 		err := query(`
 			UPDATE users
@@ -86,7 +86,7 @@ func main() {
 	ctx := context.Background()
 
 	// Step 1: Initialize database connection
-	db, err := octobe.New(postgres.OpenPGXPool(ctx, dsn))
+	db, err := octobe.New(pgx.OpenPGXPool(ctx, dsn))
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -105,7 +105,7 @@ func main() {
 	var users []User
 	// Create users in a managed transaction, the transaction is rolled back if any error occurs and
 	// committed otherwise.
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		// Step 3: Create table (in a transaction)
 		err := session.ExecuteNoResult(ctx, EnsureUsersTable())
 		if err != nil {

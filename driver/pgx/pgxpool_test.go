@@ -1,4 +1,4 @@
-package postgres_test
+package pgx_test
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
-	"github.com/Kansuler/octobe/v4/driver/postgres/mock"
+	"github.com/Kansuler/octobe/v4/driver/pgx"
+	"github.com/Kansuler/octobe/v4/driver/pgx/mock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,12 +24,12 @@ func TestPGXPoolRunInTransactionCommits(t *testing.T) {
 	m.ExpectCommit()
 	m.ExpectClose()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	err = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		err := session.ExecuteNoResult(ctx, Migration())
 		if !assert.NoError(t, err) {
 			return err
@@ -85,12 +85,12 @@ func TestPGXPoolManualTransactionCommits(t *testing.T) {
 	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectCommit()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	session, err := ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -147,7 +147,7 @@ func TestPGXPoolNonTransactionalSessionExecutesHandlers(t *testing.T) {
 	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 	m.ExpectRelease()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -203,7 +203,7 @@ func TestPGXPoolNonTransactionalSessionCloseReleasesConnection(t *testing.T) {
 	m.ExpectAcquire()
 	m.ExpectRelease()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -228,15 +228,15 @@ func TestPGXPoolRunInTransactionRollsBackOnError(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	err = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		err := session.ExecuteNoResult(ctx, Migration())
 		return err
-	}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
@@ -253,19 +253,19 @@ func TestPGXPoolRunInTransactionRollsBackOnPanic(t *testing.T) {
 	m.ExpectRollback()
 	m.ExpectClose()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
 	assert.Panics(t, func() {
-		_ = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+		_ = ob.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 			err := session.ExecuteNoResult(ctx, Migration())
 			if err != nil {
 				return err
 			}
 			panic("some panic")
-		}, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+		}, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	})
 
 	assert.NoError(t, ob.Close(ctx))
@@ -283,12 +283,12 @@ func TestPGXPoolManualTransactionRollsBack(t *testing.T) {
 	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
 	m.ExpectRollback()
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	session, err := ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -325,7 +325,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 	m.ExpectAcquire()
 	m.ExpectExec("CREATE TABLE IF NOT EXISTS products").Contains().WillReturnResult(mock.NewResult("", 0))
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -337,7 +337,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 	defer func() { assert.NoError(t, session.Close(ctx)) }()
 
 	t.Run("Exec", func(t *testing.T) {
-		err := session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err := session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			statement := newQuery("CREATE TABLE IF NOT EXISTS products (id SERIAL PRIMARY KEY, name TEXT NOT NULL)")
 
 			_, err := statement.Exec(ctx)
@@ -353,7 +353,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 	m.ExpectQueryRow("INSERT INTO products").Contains().WithArgs(name).WillReturnRow(mock.NewRow(1, name))
 
 	t.Run("QueryRow", func(t *testing.T) {
-		err := session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err := session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			statement := newQuery("INSERT INTO products (name) VALUES ($1) RETURNING id, name").WithArgs(name)
 
 			var p Product
@@ -372,11 +372,11 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 	m.ExpectQuery("SELECT id, name FROM products").Contains().WithArgs(name).WillReturnRows(mock.NewRows([]string{"id", "name"}).AddRow(1, name))
 
 	t.Run("Query", func(t *testing.T) {
-		err := session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err := session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			statement := newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs(name)
 
 			var products []Product
-			err := statement.Query(ctx, func(r postgres.Rows) error {
+			err := statement.Query(ctx, func(r pgx.Rows) error {
 				for r.Next() {
 					var p Product
 					if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -389,7 +389,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Len(t, products, 1)
 
-			return statement.Query(ctx, func(r postgres.Rows) error {
+			return statement.Query(ctx, func(r pgx.Rows) error {
 				for r.Next() {
 					var p Product
 					if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -407,7 +407,7 @@ func TestPGXPoolStatementCannotBeReused(t *testing.T) {
 }
 
 func TestOpenPGXWithPoolNil(t *testing.T) {
-	_, err := postgres.OpenPGXWithPool(nil)()
+	_, err := pgx.OpenPGXWithPool(nil)()
 	assert.Error(t, err)
 }
 
@@ -418,12 +418,12 @@ func TestPGXPoolBeginTxReturnsDriverError(t *testing.T) {
 	expectedErr := errors.New("begin error")
 	m.ExpectBeginTx().WillReturnError(expectedErr)
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	_, err = ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	_, err = ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 	assert.NoError(t, m.AllExpectationsMet())
@@ -437,12 +437,12 @@ func TestPGXPoolCommitReturnsDriverError(t *testing.T) {
 	m.ExpectBeginTx()
 	m.ExpectCommit().WillReturnError(expectedErr)
 
-	ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+	ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 
-	session, err := ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -464,7 +464,7 @@ func TestPGXPoolStatementExecError(t *testing.T) {
 		m.ExpectExec("INSERT INTO products").Contains().WillReturnError(expectedErr)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -475,7 +475,7 @@ func TestPGXPoolStatementExecError(t *testing.T) {
 		}
 		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			_, err := newQuery("INSERT INTO products (name) VALUES ($1)").WithArgs("test").Exec(ctx)
 			return err
 		})
@@ -488,17 +488,17 @@ func TestPGXPoolStatementExecError(t *testing.T) {
 		m.ExpectExec("INSERT INTO products").Contains().WillReturnError(expectedErr)
 		m.ExpectRollback()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		session, err := ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+		session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			_, err := newQuery("INSERT INTO products (name) VALUES ($1)").WithArgs("test").Exec(ctx)
 			return err
 		})
@@ -522,7 +522,7 @@ func TestPGXPoolStatementQueryRowError(t *testing.T) {
 		m.ExpectQueryRow("SELECT id FROM products").Contains().WillReturnRow(row)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -534,7 +534,7 @@ func TestPGXPoolStatementQueryRowError(t *testing.T) {
 		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
 		var id int
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			return newQuery("SELECT id FROM products WHERE name = $1").WithArgs("test").QueryRow(ctx, &id)
 		})
 		assert.Error(t, err)
@@ -547,18 +547,18 @@ func TestPGXPoolStatementQueryRowError(t *testing.T) {
 		m.ExpectQueryRow("SELECT id FROM products").Contains().WillReturnRow(row)
 		m.ExpectRollback()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		session, err := ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+		session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
 		var id int
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
 			return newQuery("SELECT id FROM products WHERE name = $1").WithArgs("test").QueryRow(ctx, &id)
 		})
 		assert.Error(t, err)
@@ -580,7 +580,7 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT id, name FROM products").Contains().WillReturnError(expectedErr)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -591,8 +591,8 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		}
 		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
-			return newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs("test").Query(ctx, func(r postgres.Rows) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
+			return newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs("test").Query(ctx, func(r pgx.Rows) error {
 				for r.Next() {
 					var p Product
 					if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -611,18 +611,18 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT id, name FROM products").Contains().WillReturnError(expectedErr)
 		m.ExpectRollback()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		session, err := ob.Transaction(ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+		session, err := ob.Transaction(ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
-			return newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs("test").Query(ctx, func(r postgres.Rows) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
+			return newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs("test").Query(ctx, func(r pgx.Rows) error {
 				for r.Next() {
 					var p Product
 					if err := r.Scan(&p.ID, &p.Name); err != nil {
@@ -643,7 +643,7 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		m.ExpectQuery("SELECT id, name FROM products").Contains().WillReturnRows(rows)
 		m.ExpectRelease()
 
-		ob, err := octobe.New(postgres.OpenPGXWithPool(m))
+		ob, err := octobe.New(pgx.OpenPGXWithPool(m))
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -654,8 +654,8 @@ func TestPGXPoolStatementQueryError(t *testing.T) {
 		}
 		defer func() { assert.NoError(t, session.Close(ctx)) }()
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
-			return newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs("test").Query(ctx, func(r postgres.Rows) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery pgx.QueryFactory) error {
+			return newQuery("SELECT id, name FROM products WHERE name = $1").WithArgs("test").Query(ctx, func(r pgx.Rows) error {
 				return expectedErr
 			})
 		})

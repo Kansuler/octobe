@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	opgx "github.com/Kansuler/octobe/v4/driver/pgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,7 +18,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Ping success", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
 		mock.ExpectPing()
@@ -29,7 +29,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Ping error", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
 		expectedErr := errors.New("ping failed")
@@ -43,7 +43,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Close success", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
 		mock.ExpectClose()
@@ -54,7 +54,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Exec success without tx", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
 		session, err := o.Session(ctx)
@@ -65,7 +65,7 @@ func TestPoolMock(t *testing.T) {
 		args := []any{1, "test"}
 		mock.ExpectExec(query).WithArgs(args...).WillReturnResult(pgconn.CommandTag{})
 
-		_, err = session.Execute(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) (postgres.ExecResult, error) {
+		_, err = session.Execute(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) (opgx.ExecResult, error) {
 			return newQuery(query).WithArgs(args...).Exec(ctx)
 		})
 		require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Exec error without tx", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
 		session, err := o.Session(ctx)
@@ -85,7 +85,7 @@ func TestPoolMock(t *testing.T) {
 		expectedErr := errors.New("exec error")
 		mock.ExpectExec(query).WillReturnError(expectedErr)
 
-		_, err = session.Execute(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) (postgres.ExecResult, error) {
+		_, err = session.Execute(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) (opgx.ExecResult, error) {
 			return newQuery(query).Exec(ctx)
 		})
 		require.Error(t, err)
@@ -95,7 +95,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Query success without tx", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
 		session, err := o.Session(ctx)
@@ -109,8 +109,8 @@ func TestPoolMock(t *testing.T) {
 
 		mock.ExpectQuery(query).WillReturnRows(rows)
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
-			return newQuery(query).Query(ctx, func(r postgres.Rows) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) error {
+			return newQuery(query).Query(ctx, func(r opgx.Rows) error {
 				i := 0
 				for r.Next() {
 					var id int
@@ -129,7 +129,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Query error without tx", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
 		session, err := o.Session(ctx)
@@ -140,8 +140,8 @@ func TestPoolMock(t *testing.T) {
 		expectedErr := errors.New("query error")
 		mock.ExpectQuery(query).WillReturnError(expectedErr)
 
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
-			return newQuery(query).Query(ctx, func(r postgres.Rows) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) error {
+			return newQuery(query).Query(ctx, func(r opgx.Rows) error {
 				return nil
 			})
 		})
@@ -152,7 +152,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("QueryRow success without tx", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
 		session, err := o.Session(ctx)
@@ -164,7 +164,7 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectQueryRow(query).WithArgs(1).WillReturnRow(row)
 
 		var name string
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) error {
 			return newQuery(query).WithArgs(1).QueryRow(ctx, &name)
 		})
 		require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("QueryRow error without tx", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 		mock.ExpectAcquire()
 		session, err := o.Session(ctx)
@@ -187,7 +187,7 @@ func TestPoolMock(t *testing.T) {
 		mock.ExpectQueryRow(query).WithArgs(1).WillReturnRow(row)
 
 		var name string
-		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) error {
+		err = session.ExecuteNoResult(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) error {
 			return newQuery(query).WithArgs(1).QueryRow(ctx, &name)
 		})
 		require.Error(t, err)
@@ -197,7 +197,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Session close releases acquired connection", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
 		mock.ExpectAcquire()
@@ -211,14 +211,14 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Transaction success", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
-		txOpts := postgres.PGXTxOptions{}
+		txOpts := opgx.PGXTxOptions{}
 		mock.ExpectBeginTx()
 		mock.ExpectCommit()
 
-		session, err := o.Transaction(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, opgx.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Commit(ctx)
@@ -229,19 +229,19 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Transaction with exec", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
-		txOpts := postgres.PGXTxOptions{}
+		txOpts := opgx.PGXTxOptions{}
 		mock.ExpectBeginTx()
 		query := "INSERT INTO users (name) VALUES ($1)"
 		mock.ExpectExec(query).WithArgs("test-user").WillReturnResult(pgconn.CommandTag{})
 		mock.ExpectCommit()
 
-		session, err := o.Transaction(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, opgx.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
-		_, err = session.Execute(ctx, func(ctx context.Context, newQuery postgres.QueryFactory) (postgres.ExecResult, error) {
+		_, err = session.Execute(ctx, func(ctx context.Context, newQuery opgx.QueryFactory) (opgx.ExecResult, error) {
 			return newQuery(query).WithArgs("test-user").Exec(ctx)
 		})
 		require.NoError(t, err)
@@ -254,14 +254,14 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Transaction rollback", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
-		txOpts := postgres.PGXTxOptions{}
+		txOpts := opgx.PGXTxOptions{}
 		mock.ExpectBeginTx()
 		mock.ExpectRollback()
 
-		session, err := o.Transaction(ctx, postgres.WithPGXTxOptions(txOpts))
+		session, err := o.Transaction(ctx, opgx.WithPGXTxOptions(txOpts))
 		require.NoError(t, err)
 
 		err = session.Rollback(ctx)
@@ -282,7 +282,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("No more expectations", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
 		err = o.Ping(ctx)
@@ -292,7 +292,7 @@ func TestPoolMock(t *testing.T) {
 
 	t.Run("Expectation order mismatch", func(t *testing.T) {
 		mock := NewPGXPool()
-		o, err := octobe.New(postgres.OpenPGXWithPool(mock))
+		o, err := octobe.New(opgx.OpenPGXWithPool(mock))
 		require.NoError(t, err)
 
 		mock.ExpectClose()

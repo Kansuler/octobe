@@ -31,7 +31,7 @@ import (
 	"os"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/pgx"
 )
 
 type User struct {
@@ -39,8 +39,8 @@ type User struct {
 	Email string
 }
 
-func CreateUser(email string) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, query postgres.QueryFactory) (User, error) {
+func CreateUser(email string) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, query pgx.QueryFactory) (User, error) {
 		var user User
 		err := query(`INSERT INTO users (email) VALUES ($1) RETURNING id, email`).
 			WithArgs(email).
@@ -50,7 +50,7 @@ func CreateUser(email string) octobe.Handler[User, postgres.QueryFactory] {
 }
 
 func main() {
-	db, err := octobe.New(postgres.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
+	db, err := octobe.New(pgx.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
 	if err != nil {
 		return User{}, err
 	}
@@ -86,7 +86,7 @@ func main() {
   }
 
 	// Fully managed transaction, if it returns an error, the transaction is rolled back. Otherwise, it is committed.
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		var err error
 		user, err = session.Execute(ctx, CreateUser(email))
 		return err
@@ -103,8 +103,8 @@ func main() {
 Handlers keep SQL close to the result type. The result type parameter belongs to the execution method, so `session.Execute(ctx, handler)` infers `R` from `Handler[R, QF]`:
 
 ```go
-func UsersByDomain(domain string) octobe.Handler[[]User, postgres.QueryFactory] {
-	return func(ctx context.Context, query postgres.QueryFactory) ([]User, error) {
+func UsersByDomain(domain string) octobe.Handler[[]User, pgx.QueryFactory] {
+	return func(ctx context.Context, query pgx.QueryFactory) ([]User, error) {
 		var users []User
 		err := query(`
 			SELECT id, email
@@ -113,7 +113,7 @@ func UsersByDomain(domain string) octobe.Handler[[]User, postgres.QueryFactory] 
 			ORDER BY id
 		`).
 		WithArgs("%@" + domain).
-		Query(ctx, func(rows postgres.Rows) error {
+		Query(ctx, func(rows pgx.Rows) error {
 			for rows.Next() {
 				var user User
 				if err := rows.Scan(&user.ID, &user.Email); err != nil {
@@ -143,7 +143,7 @@ created, err := session.ExecuteSequence(ctx,
 Compose several operations in the same transaction:
 
 ```go
-err := db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+err := db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 	user, err := session.Execute(ctx, CreateUser("alice@example.com"))
 	if err != nil {
 		return err
@@ -197,7 +197,7 @@ return tx.Commit(ctx)
 - **Explicit lifecycle APIs**: use `Session` for an explicitly closed non-transactional session, or `Transaction` for manual commit/rollback.
 - **Raw SQL execution**: `Exec`, `QueryRow`, and callback-based `Query` map directly to pgx-style operations.
 - **PostgreSQL driver**: supports `pgx.Conn`, `pgxpool.Pool`, DSNs, and existing connections/pools.
-- **Testing mocks**: `driver/postgres/mock` lets tests expect queries, rows, transactions, commits, rollbacks, and pool behavior.
+- **Testing mocks**: `driver/pgx/mock` lets tests expect queries, rows, transactions, commits, rollbacks, and pool behavior.
 - **Single-use statements**: a statement can only execute once, preventing accidental reuse.
 
 ## What Octobe is not
@@ -212,7 +212,7 @@ return tx.Commit(ctx)
 Create from a DSN:
 
 ```go
-db, err := octobe.New(postgres.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
+db, err := octobe.New(pgx.OpenPGXPool(ctx, os.Getenv("DATABASE_URL")))
 ```
 
 Or use an existing pool:
@@ -229,7 +229,7 @@ if err != nil {
 	return err
 }
 
-db, err := octobe.New(postgres.OpenPGXWithPool(pool))
+db, err := octobe.New(pgx.OpenPGXWithPool(pool))
 ```
 
 Set transaction options when needed:
@@ -237,10 +237,10 @@ Set transaction options when needed:
 ```go
 err := db.RunInTransaction(
 	ctx,
-	func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		return session.ExecuteNoResult(ctx, RebuildReport())
 	},
-	postgres.WithPGXTxOptions(postgres.PGXTxOptions{IsoLevel: pgx.Serializable}),
+	pgx.WithPGXTxOptions(pgx.PGXTxOptions{IsoLevel: pgx.Serializable}),
 )
 ```
 
@@ -251,7 +251,7 @@ func TestCreateUser(t *testing.T) {
 	ctx := context.Background()
 	pgxMock := mock.NewPGXPool()
 
-	db, err := octobe.New(postgres.OpenPGXWithPool(pgxMock))
+	db, err := octobe.New(pgx.OpenPGXWithPool(pgxMock))
 	require.NoError(t, err)
 
 	pgxMock.ExpectBeginTx()
@@ -261,7 +261,7 @@ func TestCreateUser(t *testing.T) {
 	pgxMock.ExpectCommit()
 
 	var user User
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		var err error
 		user, err = session.Execute(ctx, CreateUser("alice@example.com"))
 		return err
@@ -310,7 +310,7 @@ func (d *pgxpoolConn) RunInTransaction(
 }
 ```
 
-Use the PostgreSQL driver in [`driver/postgres`](driver/postgres/) as the reference implementation.
+Use the PostgreSQL driver in [`driver/pgx`](driver/pgx/) as the reference implementation.
 
 ## License
 

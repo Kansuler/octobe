@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	opgx "github.com/Kansuler/octobe/v4/driver/pgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PGXPool provides a mock implementation of postgres.PGXPool and pgx.Tx interfaces
+// PGXPool provides a mock implementation of opgx.PGXPool and pgx.Tx interfaces
 // for testing database pool interactions without requiring an actual database connection.
 type PGXPool struct {
 	mu              sync.Mutex
@@ -21,10 +21,10 @@ type PGXPool struct {
 }
 
 var (
-	_ postgres.PGXPool                    = (*PGXPool)(nil)
-	_ postgres.PGXPoolSessionConnAcquirer = (*PGXPool)(nil)
-	_ postgres.PGXPoolSessionConn         = (*PGXPool)(nil)
-	_ pgx.Tx                              = (*PGXPool)(nil)
+	_ opgx.PGXPool                    = (*PGXPool)(nil)
+	_ opgx.PGXPoolSessionConnAcquirer = (*PGXPool)(nil)
+	_ opgx.PGXPoolSessionConn         = (*PGXPool)(nil)
+	_ pgx.Tx                          = (*PGXPool)(nil)
 )
 
 // NewPGXPool creates a new mock database connection pool for testing.
@@ -305,7 +305,7 @@ func (m *PGXPool) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
 	return ret[0].(*pgxpool.Conn), nil
 }
 
-func (m *PGXPool) AcquireSessionConn(ctx context.Context) (postgres.PGXPoolSessionConn, error) {
+func (m *PGXPool) AcquireSessionConn(ctx context.Context) (opgx.PGXPoolSessionConn, error) {
 	e, err := m.findExpectation("Acquire")
 	if err != nil {
 		return nil, err
@@ -317,9 +317,9 @@ func (m *PGXPool) AcquireSessionConn(ctx context.Context) (postgres.PGXPoolSessi
 	if ret[0] == nil {
 		return m, nil
 	}
-	conn, ok := ret[0].(postgres.PGXPoolSessionConn)
+	conn, ok := ret[0].(opgx.PGXPoolSessionConn)
 	if !ok {
-		return nil, fmt.Errorf("acquired connection does not implement postgres.PGXPoolSessionConn")
+		return nil, fmt.Errorf("acquired connection does not implement opgx.PGXPoolSessionConn")
 	}
 	return conn, nil
 }

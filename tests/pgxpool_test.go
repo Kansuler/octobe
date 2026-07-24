@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/pgx"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -16,7 +16,7 @@ type PGXPoolIntegrationSuite struct {
 	suite.Suite
 
 	ctx context.Context
-	db  postgres.PGXPoolDriver
+	db  pgx.PGXPoolDriver
 }
 
 func TestPGXPoolIntegrationSuite(t *testing.T) {
@@ -27,14 +27,14 @@ func (s *PGXPoolIntegrationSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.db = openPGXPoolWithRetry(s.T(), s.ctx, integrationDSN(s.T()))
 
-	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		return session.ExecuteNoResult(s.ctx, migrateProducts(pgxPoolProductsTable))
 	})
 	s.Require().NoError(err)
 }
 
 func (s *PGXPoolIntegrationSuite) SetupTest() {
-	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		return session.ExecuteNoResult(s.ctx, truncateProducts(pgxPoolProductsTable))
 	})
 	s.Require().NoError(err)
@@ -45,7 +45,7 @@ func (s *PGXPoolIntegrationSuite) TearDownSuite() {
 		return
 	}
 
-	_ = s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	_ = s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		return session.ExecuteNoResult(s.ctx, dropProducts(pgxPoolProductsTable))
 	})
 	s.Require().NoError(s.db.Close(s.ctx))
@@ -55,7 +55,7 @@ func (s *PGXPoolIntegrationSuite) TestRunInTransactionCommits() {
 	name := "pgxpool committed product"
 	var created integrationProduct
 
-	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		var err error
 		created, err = session.Execute(s.ctx, createProduct(pgxPoolProductsTable, name))
 		return err
@@ -71,7 +71,7 @@ func (s *PGXPoolIntegrationSuite) TestRunInTransactionRollsBackOnError() {
 	name := "pgxpool rolled back product"
 	expectedErr := errors.New("force rollback")
 
-	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err := s.db.RunInTransaction(s.ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		_, err := session.Execute(s.ctx, createProduct(pgxPoolProductsTable, name))
 		if err != nil {
 			return err
@@ -88,7 +88,7 @@ func (s *PGXPoolIntegrationSuite) TestRunInTransactionRollsBackOnError() {
 func (s *PGXPoolIntegrationSuite) TestManualTransactionCommits() {
 	name := "pgxpool manual commit product"
 
-	session, err := s.db.Transaction(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.Transaction(s.ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 
@@ -104,7 +104,7 @@ func (s *PGXPoolIntegrationSuite) TestManualTransactionCommits() {
 func (s *PGXPoolIntegrationSuite) TestManualTransactionRollsBack() {
 	name := "pgxpool manual rollback product"
 
-	session, err := s.db.Transaction(s.ctx, postgres.WithPGXTxOptions(postgres.PGXTxOptions{}))
+	session, err := s.db.Transaction(s.ctx, pgx.WithPGXTxOptions(pgx.PGXTxOptions{}))
 	s.Require().NoError(err)
 	defer func() { _ = session.Rollback(s.ctx) }()
 

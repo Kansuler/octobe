@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	opgx "github.com/Kansuler/octobe/v4/driver/pgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var ErrNoExpectation = errors.New("no expectation found")
 
-// PGXConn provides a mock implementation of postgres.PGXConn and pgx.Tx interfaces
+// PGXConn provides a mock implementation of opgx.PGXConn and pgx.Tx interfaces
 // for testing database interactions without requiring an actual database connection.
 type PGXConn struct {
 	mu           sync.Mutex
@@ -21,8 +21,8 @@ type PGXConn struct {
 }
 
 var (
-	_ postgres.PGXConn = (*PGXConn)(nil)
-	_ pgx.Tx           = (*PGXConn)(nil)
+	_ opgx.PGXConn = (*PGXConn)(nil)
+	_ pgx.Tx       = (*PGXConn)(nil)
 )
 
 // NewPGXConn creates a new mock database connection for testing.

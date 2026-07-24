@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Kansuler/octobe/v4"
-	"github.com/Kansuler/octobe/v4/driver/postgres"
+	"github.com/Kansuler/octobe/v4/driver/pgx"
 )
 
 // Domain models
@@ -46,8 +46,8 @@ type Tag struct {
 }
 
 // Database schema creation
-func EnsureSchema() octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) error {
+func EnsureSchema() octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) error {
 		schema := `
 		CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
@@ -91,8 +91,8 @@ func EnsureSchema() octobe.NoResultHandler[postgres.QueryFactory] {
 }
 
 // User operations
-func CreateUser(username, email string) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (User, error) {
+func CreateUser(username, email string) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (User, error) {
 		var user User
 		query := newQuery(`
 			INSERT INTO users (username, email)
@@ -105,8 +105,8 @@ func CreateUser(username, email string) octobe.Handler[User, postgres.QueryFacto
 	}
 }
 
-func GetUserByID(id int) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (User, error) {
+func GetUserByID(id int) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (User, error) {
 		var user User
 		query := newQuery(`
 			SELECT id, username, email, created_at
@@ -119,8 +119,8 @@ func GetUserByID(id int) octobe.Handler[User, postgres.QueryFactory] {
 	}
 }
 
-func GetUserByUsername(username string) octobe.Handler[User, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (User, error) {
+func GetUserByUsername(username string) octobe.Handler[User, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (User, error) {
 		var user User
 		query := newQuery(`
 			SELECT id, username, email, created_at
@@ -134,8 +134,8 @@ func GetUserByUsername(username string) octobe.Handler[User, postgres.QueryFacto
 }
 
 // Post operations
-func CreatePost(title, content string, authorID int) octobe.Handler[Post, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (Post, error) {
+func CreatePost(title, content string, authorID int) octobe.Handler[Post, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (Post, error) {
 		var post Post
 		query := newQuery(`
 			INSERT INTO posts (title, content, author_id)
@@ -149,8 +149,8 @@ func CreatePost(title, content string, authorID int) octobe.Handler[Post, postgr
 	}
 }
 
-func GetPostWithAuthor(postID int) octobe.Handler[Post, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (Post, error) {
+func GetPostWithAuthor(postID int) octobe.Handler[Post, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (Post, error) {
 		var post Post
 		var author User
 
@@ -174,8 +174,8 @@ func GetPostWithAuthor(postID int) octobe.Handler[Post, postgres.QueryFactory] {
 	}
 }
 
-func GetPostsByAuthor(authorID int) octobe.Handler[[]Post, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) ([]Post, error) {
+func GetPostsByAuthor(authorID int) octobe.Handler[[]Post, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) ([]Post, error) {
 		query := newQuery(`
 			SELECT id, title, content, author_id, created_at, updated_at
 			FROM posts
@@ -183,7 +183,7 @@ func GetPostsByAuthor(authorID int) octobe.Handler[[]Post, postgres.QueryFactory
 			ORDER BY created_at DESC`)
 
 		var posts []Post
-		err := query.WithArgs(authorID).Query(ctx, func(rows postgres.Rows) error {
+		err := query.WithArgs(authorID).Query(ctx, func(rows pgx.Rows) error {
 			for rows.Next() {
 				var post Post
 				if err := rows.Scan(&post.ID, &post.Title, &post.Content,
@@ -199,8 +199,8 @@ func GetPostsByAuthor(authorID int) octobe.Handler[[]Post, postgres.QueryFactory
 	}
 }
 
-func UpdatePost(postID int, title, content string) octobe.Handler[Post, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (Post, error) {
+func UpdatePost(postID int, title, content string) octobe.Handler[Post, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (Post, error) {
 		var post Post
 		query := newQuery(`
 			UPDATE posts
@@ -215,8 +215,8 @@ func UpdatePost(postID int, title, content string) octobe.Handler[Post, postgres
 	}
 }
 
-func DeletePost(postID int) octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) error {
+func DeletePost(postID int) octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) error {
 		query := newQuery(`DELETE FROM posts WHERE id = $1`)
 		_, err := query.WithArgs(postID).Exec(ctx)
 		return err
@@ -224,8 +224,8 @@ func DeletePost(postID int) octobe.NoResultHandler[postgres.QueryFactory] {
 }
 
 // Comment operations
-func CreateComment(postID, authorID int, content string) octobe.Handler[Comment, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (Comment, error) {
+func CreateComment(postID, authorID int, content string) octobe.Handler[Comment, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (Comment, error) {
 		var comment Comment
 		query := newQuery(`
 			INSERT INTO comments (post_id, author_id, content)
@@ -239,8 +239,8 @@ func CreateComment(postID, authorID int, content string) octobe.Handler[Comment,
 	}
 }
 
-func GetCommentsByPost(postID int) octobe.Handler[[]Comment, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) ([]Comment, error) {
+func GetCommentsByPost(postID int) octobe.Handler[[]Comment, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) ([]Comment, error) {
 		query := newQuery(`
 			SELECT id, post_id, author_id, content, created_at
 			FROM comments
@@ -248,7 +248,7 @@ func GetCommentsByPost(postID int) octobe.Handler[[]Comment, postgres.QueryFacto
 			ORDER BY created_at ASC`)
 
 		var comments []Comment
-		err := query.WithArgs(postID).Query(ctx, func(rows postgres.Rows) error {
+		err := query.WithArgs(postID).Query(ctx, func(rows pgx.Rows) error {
 			for rows.Next() {
 				var comment Comment
 				if err := rows.Scan(&comment.ID, &comment.PostID, &comment.AuthorID,
@@ -265,8 +265,8 @@ func GetCommentsByPost(postID int) octobe.Handler[[]Comment, postgres.QueryFacto
 }
 
 // Tag operations
-func EnsureTag(name string) octobe.Handler[Tag, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (Tag, error) {
+func EnsureTag(name string) octobe.Handler[Tag, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (Tag, error) {
 		var tag Tag
 		query := newQuery(`
 			INSERT INTO tags (name) VALUES ($1)
@@ -278,8 +278,8 @@ func EnsureTag(name string) octobe.Handler[Tag, postgres.QueryFactory] {
 	}
 }
 
-func AddTagToPost(postID, tagID int) octobe.NoResultHandler[postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) error {
+func AddTagToPost(postID, tagID int) octobe.NoResultHandler[pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) error {
 		query := newQuery(`
 			INSERT INTO post_tags (post_id, tag_id)
 			VALUES ($1, $2)
@@ -291,8 +291,8 @@ func AddTagToPost(postID, tagID int) octobe.NoResultHandler[postgres.QueryFactor
 }
 
 // Complex operations that demonstrate transaction usage
-func CreatePostWithTags(title, content string, authorID int, tagNames []string) octobe.Handler[Post, postgres.QueryFactory] {
-	return func(ctx context.Context, newQuery postgres.QueryFactory) (Post, error) {
+func CreatePostWithTags(title, content string, authorID int, tagNames []string) octobe.Handler[Post, pgx.QueryFactory] {
+	return func(ctx context.Context, newQuery pgx.QueryFactory) (Post, error) {
 		// This handler demonstrates multiple related operations
 		// that should succeed or fail together
 
@@ -342,10 +342,10 @@ func CreatePostWithTags(title, content string, authorID int, tagNames []string) 
 
 // Application service layer - demonstrates transaction usage
 type BlogService struct {
-	db postgres.PGXDriver
+	db pgx.PGXDriver
 }
 
-func NewBlogService(db postgres.PGXDriver) *BlogService {
+func NewBlogService(db pgx.PGXDriver) *BlogService {
 	return &BlogService{db: db}
 }
 
@@ -353,7 +353,7 @@ func (s *BlogService) CreateUserAndWelcomePost(ctx context.Context, username, em
 	var user User
 	var post Post
 
-	err := s.db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err := s.db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		var err error
 
 		// Create user
@@ -384,7 +384,7 @@ func (s *BlogService) GetPostWithComments(ctx context.Context, postID int) (*Pos
 	var post Post
 	var comments []Comment
 
-	err := s.db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err := s.db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		var err error
 
 		post, err = session.Execute(ctx, GetPostWithAuthor(postID))
@@ -418,7 +418,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize database
-	db, err := octobe.New(postgres.OpenPGXPool(ctx, dsn))
+	db, err := octobe.New(pgx.OpenPGXPool(ctx, dsn))
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -435,7 +435,7 @@ func main() {
 	log.Println("Connected to database successfully")
 
 	// Create schema
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		return session.ExecuteNoResult(ctx, EnsureSchema())
 	})
 	if err != nil {
@@ -457,7 +457,7 @@ func main() {
 
 	// Demo: Create another user
 	var bob User
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		bob, err = session.Execute(ctx, CreateUser("bob", "bob@example.com"))
 		return err
 	})
@@ -467,7 +467,7 @@ func main() {
 	fmt.Printf("Created user: %s (ID: %d)\n", bob.Username, bob.ID)
 
 	// Demo: Create a blog post with tags
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		post, err := session.Execute(ctx, CreatePostWithTags(
 			"Getting Started with Go",
 			"Go is a fantastic programming language for backend development...",
@@ -485,7 +485,7 @@ func main() {
 	}
 
 	// Demo: Add comments
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		comment, err := session.Execute(ctx, CreateComment(welcomePost.ID, bob.ID, "Welcome to the platform, Alice!"))
 		if err != nil {
 			return err
@@ -516,7 +516,7 @@ func main() {
 	}
 
 	// Demo: Get all posts by alice
-	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[postgres.QueryFactory]) error {
+	err = db.RunInTransaction(ctx, func(session *octobe.SessionManaged[pgx.QueryFactory]) error {
 		posts, err := session.Execute(ctx, GetPostsByAuthor(user.ID))
 		if err != nil {
 			return err
